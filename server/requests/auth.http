@@ -1,0 +1,85 @@
+# Auth endpoint smoke tests.
+# VS Code: install the "REST Client" extension, then click "Send Request".
+# Run them top to bottom — later requests reuse values from earlier ones.
+
+@host = http://localhost:5000
+@email = assessment.user@example.com
+@password = Passw0rd123
+
+### Health check
+GET {{host}}/health
+
+### 1. Register — returns devOtp in development
+# @name register
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Assessment User",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 2. Verify OTP — picks the code straight out of the register response
+# @name verify
+POST {{host}}/api/auth/verify-otp
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "{{register.response.body.data.verification.devOtp}}"
+}
+
+### 3. Login
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 4. Current user
+GET {{host}}/api/auth/me
+Authorization: Bearer {{login.response.body.data.token}}
+
+
+# ───────────────────────── negative cases ─────────────────────────
+
+### Resend before the cooldown expires -> 429 OTP_COOLDOWN
+POST {{host}}/api/auth/resend-otp
+Content-Type: application/json
+
+{ "email": "{{email}}" }
+
+### Wrong OTP -> 400 OTP_INVALID with attemptsRemaining
+POST {{host}}/api/auth/verify-otp
+Content-Type: application/json
+
+{ "email": "{{email}}", "code": "000000" }
+
+### Weak password -> 422 VALIDATION_ERROR
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "fullName": "Weak Password", "email": "weak@example.com", "password": "short" }
+
+### Duplicate email -> 409 EMAIL_ALREADY_REGISTERED
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "fullName": "Assessment User", "email": "{{email}}", "password": "{{password}}" }
+
+### Wrong password -> 401 INVALID_CREDENTIALS
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "WrongPass123" }
+
+### No token -> 401 MISSING_TOKEN
+GET {{host}}/api/auth/me
+
+### Bad token -> 401 INVALID_TOKEN
+GET {{host}}/api/auth/me
+Authorization: Bearer not-a-real-token

@@ -1,0 +1,11 @@
+# Normalise line endings so the repository always stores LF,
+# regardless of which OS a contributor is on.
+* text=auto eol=lf
+
+# Binary files must never be normalised.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

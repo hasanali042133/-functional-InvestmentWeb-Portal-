@@ -1,0 +1,257 @@
+// Investment / Account Opening Portal — data model
+//
+// Design notes:
+//  * Money is stored as NUMERIC (Prisma `Decimal`), never Float — floating point
+//    rounding produces wrong balances.
+//  * Investments store `units` and the NAV at purchase, so the current value is a
+//    real derived calculation (units x current NAV) rather than a stored guess.
+//  * `product_nav_history` is what the portfolio-performance chart is built from,
+//    so the charts render genuine application data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- enums
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum EmploymentStatus {
+  SALARIED
+  SELF_EMPLOYED
+  BUSINESS
+  STUDENT
+  RETIRED
+  UNEMPLOYED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DocumentType {
+  CNIC_FRONT
+  CNIC_BACK
+  PROOF_OF_ADDRESS
+}
+
+enum TransactionType {
+  INVESTMENT
+  REDEMPTION
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum OtpPurpose {
+  EMAIL_VERIFICATION
+}
+
+// ---------------------------------------------------------------- auth
+
+model User {
+  id              String   @id @default(uuid())
+  fullName        String   @map("full_name")
+  email           String   @unique
+  passwordHash    String   @map("password_hash")
+  isEmailVerified Boolean  @default(false) @map("is_email_verified")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  otps         Otp[]
+  application  Application?
+  documents    Document[]
+  investments  Investment[]
+  transactions Transaction[]
+
+  @@map("users")
+}
+
+model Otp {
+  id         String     @id @default(uuid())
+  userId     String     @map("user_id")
+  codeHash   String     @map("code_hash")
+  purpose    OtpPurpose @default(EMAIL_VERIFICATION)
+  attempts   Int        @default(0)
+  expiresAt  DateTime   @map("expires_at")
+  consumedAt DateTime?  @map("consumed_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("otps")
+}
+
+// ---------------------------------------------------------- account opening
+
+model Application {
+  id     String            @id @default(uuid())
+  userId String            @unique @map("user_id")
+  status ApplicationStatus @default(DRAFT)
+
+  // Personal information
+  fullName      String?        @map("full_name")
+  fatherName    String?        @map("father_name")
+  dateOfBirth   DateTime?      @map("date_of_birth") @db.Date
+  gender        Gender?
+  cnic          String?
+  mobile        String?
+  email         String?
+  maritalStatus MaritalStatus? @map("marital_status")
+
+  // Address information
+  addressLine1 String? @map("address_line1")
+  city         String?
+  province     String?
+  country      String?
+  postalCode   String? @map("postal_code")
+
+  // Employment / financial information
+  employmentStatus         EmploymentStatus? @map("employment_status")
+  occupation               String?
+  employerName             String?           @map("employer_name")
+  monthlyIncome            Decimal?          @map("monthly_income") @db.Decimal(18, 2)
+  sourceOfIncome           String?           @map("source_of_income")
+  expectedInvestmentAmount Decimal?          @map("expected_investment_amount") @db.Decimal(18, 2)
+
+  // Investment profile
+  investmentObjective  String?    @map("investment_objective")
+  riskProfile          RiskLevel? @map("risk_profile")
+  investmentExperience String?    @map("investment_experience")
+  investmentFrequency  String?    @map("investment_frequency")
+
+  termsAccepted Boolean   @default(false) @map("terms_accepted")
+  submittedAt   DateTime? @map("submitted_at")
+  approvedAt    DateTime? @map("approved_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@map("applications")
+}
+
+model Document {
+  id            String       @id @default(uuid())
+  userId        String       @map("user_id")
+  applicationId String       @map("application_id")
+  type          DocumentType
+  url           String
+  publicId      String       @map("public_id")
+  mimeType      String       @map("mime_type")
+  sizeBytes     Int          @map("size_bytes")
+  isCropped     Boolean      @default(false) @map("is_cropped")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // One document per type per application — re-uploading replaces it.
+  @@unique([applicationId, type])
+  @@index([userId])
+  @@map("documents")
+}
+
+// ------------------------------------------------------------- investments
+
+model Product {
+  id                String    @id @default(uuid())
+  code              String    @unique
+  name              String
+  category          String
+  riskLevel         RiskLevel @map("risk_level")
+  minInvestment     Decimal   @map("min_investment") @db.Decimal(18, 2)
+  expectedReturnPct Decimal   @map("expected_return_pct") @db.Decimal(5, 2)
+  description       String
+  currentNav        Decimal   @map("current_nav") @db.Decimal(18, 4)
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  navHistory   ProductNavHistory[]
+  investments  Investment[]
+  transactions Transaction[]
+
+  @@map("products")
+}
+
+model ProductNavHistory {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  date      DateTime @db.Date
+  nav       Decimal  @db.Decimal(18, 4)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, date])
+  @@index([productId, date])
+  @@map("product_nav_history")
+}
+
+model Investment {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  productId      String   @map("product_id")
+  amountInvested Decimal  @map("amount_invested") @db.Decimal(18, 2)
+  units          Decimal  @db.Decimal(18, 6)
+  navAtPurchase  Decimal  @map("nav_at_purchase") @db.Decimal(18, 4)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product       @relation(fields: [productId], references: [id])
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([userId, productId])
+  @@map("investments")
+}
+
+model Transaction {
+  id           String            @id @default(uuid())
+  userId       String            @map("user_id")
+  investmentId String?           @map("investment_id")
+  productId    String            @map("product_id")
+  txnRef       String            @unique @map("txn_ref")
+  type         TransactionType   @default(INVESTMENT)
+  amount       Decimal           @db.Decimal(18, 2)
+  status       TransactionStatus @default(COMPLETED)
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investment Investment? @relation(fields: [investmentId], references: [id])
+  product    Product     @relation(fields: [productId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("transactions")
+}

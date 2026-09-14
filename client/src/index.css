@@ -1,0 +1,67 @@
+@import 'tailwindcss';
+
+/**
+ * Design tokens.
+ *
+ * Navy carries the brand, teal marks progress and calls to action, and gains
+ * and losses get their own semantic colours so a number's direction is legible
+ * without reading the sign.
+ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #d9e5ff;
+  --color-brand-200: #bcd0ff;
+  --color-brand-300: #8eb0ff;
+  --color-brand-400: #5985fd;
+  --color-brand-500: #345ef8;
+  --color-brand-600: #1f3ded;
+  --color-brand-700: #1a2fd9;
+  --color-brand-800: #1c29b0;
+  --color-brand-900: #1e2a8b;
+  --color-brand-950: #161b54;
+
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #14b8a6;
+  --color-accent-600: #0d9488;
+
+  --color-gain: #047857;
+  --color-gain-soft: #ecfdf5;
+  --color-loss: #be123c;
+  --color-loss-soft: #fff1f2;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 font-sans text-slate-900 antialiased;
+  }
+
+  /* Number columns line up when digits are the same width. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Visible focus for keyboard users, without a ring on every mouse click. */
+  :focus-visible {
+    @apply outline-brand-600 outline-2 outline-offset-2;
+  }
+}
+
+@layer utilities {
+  /* Wide tables and charts scroll inside their own container rather than
+     forcing the whole page sideways on a phone. */
+  .scroll-x {
+    @apply -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}

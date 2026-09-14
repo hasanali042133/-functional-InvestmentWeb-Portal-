@@ -14,7 +14,15 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+
+  // Pooled connection — used by the running application. A serverless Postgres
+  // pooler keeps connection counts low under concurrent requests.
+  url = env("DATABASE_URL")
+
+  // Direct connection — used for migrations only. Schema changes need a real
+  // session, which a transaction pooler cannot guarantee. Falls back to
+  // DATABASE_URL when unset, so a plain local Postgres needs no extra variable.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------- enums

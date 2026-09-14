@@ -14,6 +14,9 @@ const envSchema = z.object({
   CLIENT_URL: z.string().url().default('http://localhost:5173'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // Read by Prisma for migrations only; optional, so a plain local Postgres
+  // works with DATABASE_URL alone.
+  DIRECT_URL: z.string().optional(),
 
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),

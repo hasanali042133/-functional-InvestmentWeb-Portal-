@@ -48,6 +48,57 @@ const Verification = {
   },
 };
 
+const Product = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    code: { type: 'string', example: 'GROWTH' },
+    name: { type: 'string', example: 'Growth Fund' },
+    category: { type: 'string', example: 'Equity' },
+    riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'], example: 'HIGH' },
+    minInvestment: { type: 'number', example: 5000 },
+    expectedReturnPct: { type: 'number', example: 18.5 },
+    description: { type: 'string' },
+    currentNav: { type: 'number', example: 117.5521, description: 'Net asset value per unit.' },
+  },
+};
+
+const ProductDetail = {
+  allOf: [
+    { $ref: '#/components/schemas/Product' },
+    {
+      type: 'object',
+      properties: {
+        performance: {
+          type: 'object',
+          description: 'Derived from the stored NAV history, so it always agrees with the chart.',
+          properties: {
+            periodDays: { type: 'integer', example: 90 },
+            startingNav: { type: 'number', example: 112.4 },
+            currentNav: { type: 'number', example: 117.5521 },
+            highestNav: { type: 'number', example: 118.02 },
+            lowestNav: { type: 'number', example: 110.31 },
+            changePct: { type: 'number', example: 4.58 },
+            changePct30d: { type: 'number', example: 1.62 },
+            changePct7d: { type: 'number', example: 0.41 },
+          },
+        },
+        navHistory: {
+          type: 'array',
+          description: 'Daily price series used to draw the performance chart.',
+          items: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', format: 'date', example: '2026-09-14' },
+              nav: { type: 'number', example: 117.5521 },
+            },
+          },
+        },
+      },
+    },
+  ],
+};
+
 const ErrorResponse = {
   type: 'object',
   properties: {
@@ -114,6 +165,7 @@ export const openApiSpec = {
   tags: [
     { name: 'System', description: 'Service status' },
     { name: 'Authentication', description: 'Registration, email OTP verification and sign in' },
+    { name: 'Products', description: 'The investment products a customer can buy' },
   ],
   components: {
     securitySchemes: {
@@ -124,7 +176,7 @@ export const openApiSpec = {
         description: 'Paste the `token` returned by login or verify-otp.',
       },
     },
-    schemas: { User, Verification, ErrorResponse },
+    schemas: { User, Verification, Product, ProductDetail, ErrorResponse },
   },
   paths: {
     '/health': {
@@ -391,6 +443,90 @@ export const openApiSpec = {
             success: false,
             message: 'Your session has expired. Please sign in again.',
             code: 'TOKEN_EXPIRED',
+          }),
+        },
+      },
+    },
+
+    '/api/products': {
+      get: {
+        tags: ['Products'],
+        summary: 'List the available investment products',
+        description:
+          'Returns active products ordered from lowest to highest risk, so the listing reads as a risk ladder.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Products retrieved',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: {
+                      products: { type: 'array', items: { $ref: '#/components/schemas/Product' } },
+                    },
+                  },
+                  { message: 'Investment products retrieved.' },
+                ),
+              },
+            },
+          },
+          401: jsonError('Not signed in', {
+            success: false,
+            message: 'Please sign in to continue.',
+            code: 'MISSING_TOKEN',
+          }),
+        },
+      },
+    },
+
+    '/api/products/{id}': {
+      get: {
+        tags: ['Products'],
+        summary: 'Get one product with its price history',
+        description:
+          'Includes the daily NAV series and a performance summary derived from it, which the product detail screen uses for its chart.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'Product id from the listing endpoint.',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Product retrieved',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: { product: { $ref: '#/components/schemas/ProductDetail' } },
+                  },
+                  { message: 'Product details retrieved.' },
+                ),
+              },
+            },
+          },
+          401: jsonError('Not signed in', {
+            success: false,
+            message: 'Please sign in to continue.',
+            code: 'MISSING_TOKEN',
+          }),
+          404: jsonError('No such product', {
+            success: false,
+            message: 'That investment product is not available.',
+            code: 'PRODUCT_NOT_FOUND',
+          }),
+          422: jsonError('Malformed product id', {
+            success: false,
+            message: 'Please correct the highlighted fields.',
+            code: 'VALIDATION_ERROR',
+            errors: [{ field: 'id', message: 'That is not a valid product id.' }],
           }),
         },
       },

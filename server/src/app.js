@@ -90,6 +90,10 @@ app.get('/', (req, res) =>
         login: 'POST /api/auth/login',
         currentUser: 'GET /api/auth/me',
       },
+      products: {
+        list: 'GET /api/products',
+        detail: 'GET /api/products/:id',
+      },
     },
   }),
 );

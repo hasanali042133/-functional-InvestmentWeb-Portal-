@@ -10,25 +10,25 @@ import { z } from 'zod';
 const email = z
   .string()
   .trim()
-  .min(1, 'Email address is required.')
-  .email('Please enter a valid email address.');
+  .min(1, 'Enter your email address.')
+  .email('Enter a valid email address.');
 
 export const registerSchema = z
   .object({
     fullName: z
       .string()
       .trim()
-      .min(2, 'Full name must be at least 2 characters.')
-      .max(100, 'Full name must be 100 characters or fewer.')
-      .regex(/^[\p{L}\s.'-]+$/u, "Full name can only contain letters, spaces and . ' -"),
+      .min(2, 'Enter your full name.')
+      .max(100, 'This is too long.')
+      .regex(/^[\p{L}\s.'-]+$/u, 'Use letters only.'),
     email,
     password: z
       .string()
-      .min(8, 'Password must be at least 8 characters.')
-      .max(72, 'Password must be 72 characters or fewer.')
-      .regex(/[A-Za-z]/, 'Password must contain at least one letter.')
-      .regex(/[0-9]/, 'Password must contain at least one number.'),
-    confirmPassword: z.string().min(1, 'Please confirm your password.'),
+      .min(8, 'Use at least 8 characters.')
+      .max(72, 'This is too long.')
+      .regex(/[A-Za-z]/, 'Include a letter.')
+      .regex(/[0-9]/, 'Include a number.'),
+    confirmPassword: z.string().min(1, 'Re-enter your password.'),
   })
   .refine((values) => values.password === values.confirmPassword, {
     path: ['confirmPassword'],
@@ -37,14 +37,14 @@ export const registerSchema = z
 
 export const loginSchema = z.object({
   email,
-  password: z.string().min(1, 'Password is required.'),
+  password: z.string().min(1, 'Enter your password.'),
 });
 
 export const otpSchema = z.object({
   code: z
     .string()
     .trim()
-    .regex(/^[0-9]{6}$/, 'Enter the 6-digit code from your email.'),
+    .regex(/^[0-9]{6}$/, 'Enter the code from your email.'),
 });
 
 /** Strength hints shown under the password field while typing. */

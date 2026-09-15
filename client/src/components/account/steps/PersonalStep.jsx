@@ -42,7 +42,7 @@ export function PersonalStep({ defaultValues, onSubmit, isSaving, serverError })
           label="Full name"
           required
           autoComplete="name"
-          placeholder="As printed on your CNIC"
+          placeholder="Enter your full name"
           error={errors.fullName?.message}
           {...register('fullName')}
         />
@@ -50,7 +50,7 @@ export function PersonalStep({ defaultValues, onSubmit, isSaving, serverError })
         <Input
           label="Father's / mother's name"
           required
-          placeholder="Parent's full name"
+          placeholder="Enter father's or mother's name"
           error={errors.fatherName?.message}
           {...register('fatherName')}
         />
@@ -84,8 +84,7 @@ export function PersonalStep({ defaultValues, onSubmit, isSaving, serverError })
           label="CNIC number"
           required
           inputMode="numeric"
-          placeholder="42101-1234567-1"
-          hint="13 digits, dashes added automatically"
+          placeholder="Enter CNIC number"
           error={errors.cnic?.message}
           {...register('cnic', {
             onChange: (event) => setValue('cnic', formatCnic(event.target.value)),
@@ -97,7 +96,7 @@ export function PersonalStep({ defaultValues, onSubmit, isSaving, serverError })
           type="tel"
           required
           autoComplete="tel"
-          placeholder="03001234567"
+          placeholder="Enter mobile number"
           error={errors.mobile?.message}
           {...register('mobile')}
         />

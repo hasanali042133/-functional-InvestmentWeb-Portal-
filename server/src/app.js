@@ -7,6 +7,8 @@ import { env, isProduction } from './config/env.js';
 import routes from './routes/index.js';
 import { openApiSpec } from './docs/openapi.js';
 import { AppError } from './utils/AppError.js';
+import { usingLocalDisk } from './storage/index.js';
+import { UPLOAD_ROOT, PUBLIC_PATH } from './storage/local.storage.js';
 import { globalLimiter } from './middlewares/rateLimit.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 
@@ -16,14 +18,9 @@ const app = express();
 // the real client rather than the load balancer.
 app.set('trust proxy', 1);
 
-/**
- * Interactive API docs.
- *
- * Mounted before the global `helmet()` with its own relaxed policy: Swagger UI
- * is the only HTML this service serves and it needs inline styles, which the
- * default Content-Security-Policy blocks. Scoping the exception here keeps the
- * strict policy on every JSON endpoint.
- */
+// Mounted before the global helmet() with its own relaxed policy: Swagger UI is
+// the only HTML this service serves and needs inline styles, which the default
+// CSP blocks. Scoping it here keeps the strict policy on every JSON endpoint.
 app.use(
   '/api-docs',
   helmet({ contentSecurityPolicy: false }),
@@ -40,24 +37,25 @@ app.use(
 
 app.use(helmet());
 
-// Only the deployed frontend and the local dev server may call the API.
-const allowedOrigins = new Set([env.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173']);
+// Only the deployed frontend may call the API.
+const allowedOrigins = new Set([env.CLIENT_URL]);
 
-/**
- * The API's own origin is always allowed, so the Swagger UI at /api-docs can
- * call the endpoints it documents. It is derived from the request rather than
- * hardcoded, so this keeps working on the deployed URL too.
- *
- * A rejected origin is answered with a 403 through the normal error envelope —
- * throwing a bare Error here would surface as a misleading 500.
- */
+// In development any localhost port is accepted: the Vite dev server moves to
+// another port whenever its usual one is taken, and a CORS failure is an
+// unhelpful way to discover that. Production stays restricted to CLIENT_URL.
+const LOCALHOST_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+const isLocalDevOrigin = (origin) => !isProduction && LOCALHOST_ORIGIN.test(origin);
+
+// The API's own origin is always allowed so Swagger UI can call the endpoints it
+// documents, derived from the request so it holds on the deployed URL too. A
+// rejected origin gets a 403; a bare Error here would surface as a 500.
 app.use(
   cors((req, callback) => {
     const { origin } = req.headers;
     const selfOrigin = `${req.protocol}://${req.get('host')}`;
 
     // No Origin header: same-origin navigation, curl, platform health checks.
-    if (!origin || origin === selfOrigin || allowedOrigins.has(origin)) {
+    if (!origin || origin === selfOrigin || allowedOrigins.has(origin) || isLocalDevOrigin(origin)) {
       return callback(null, { origin: true, credentials: true });
     }
 
@@ -67,15 +65,22 @@ app.use(
   }),
 );
 
+// Only mounted when Cloudinary is absent, i.e. development. The frontend runs on
+// a different port, so helmet's same-origin resource policy has to be relaxed
+// here or the browser refuses to render the uploaded images.
+if (usingLocalDisk) {
+  app.use(
+    PUBLIC_PATH,
+    helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }),
+    express.static(UPLOAD_ROOT, { fallthrough: true, index: false, dotfiles: 'deny' }),
+  );
+}
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 app.use(globalLimiter);
 
-/**
- * Root index. Opening the API URL in a browser should explain what the service
- * is and where to go, rather than returning a bare 404.
- */
 app.get('/', (req, res) =>
   res.json({
     service: 'Investment / Account Opening Portal API',
@@ -90,9 +95,21 @@ app.get('/', (req, res) =>
         login: 'POST /api/auth/login',
         currentUser: 'GET /api/auth/me',
       },
+      account: {
+        application: 'GET|PUT /api/account/application',
+        status: 'GET /api/account/status',
+        documents: 'POST /api/account/documents · DELETE /api/account/documents/:id',
+        submit: 'POST /api/account/submit',
+      },
       products: {
         list: 'GET /api/products',
         detail: 'GET /api/products/:id',
+      },
+      investing: {
+        invest: 'POST /api/investments',
+        investments: 'GET /api/investments',
+        transactions: 'GET /api/transactions',
+        portfolio: 'GET /api/portfolio/summary · GET /api/portfolio/performance',
       },
     },
   }),

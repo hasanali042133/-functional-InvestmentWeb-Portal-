@@ -16,3 +16,5 @@ export const getPortfolioSummary = () => api.get('/api/portfolio/summary').then(
 
 /** → { series: [{ date, value, invested }] } — the portfolio performance chart. */
 export const getPortfolioPerformance = () => api.get('/api/portfolio/performance').then(unwrap);
+
+export const getPortfolioRisk = () => api.get('/api/portfolio/risk').then(unwrap);

@@ -86,6 +86,10 @@ export const formatDateTime = (value) => {
 export const formatAxisDate = (value) =>
   toDate(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
+/** `14:35` — compact axis labels for an intraday series, in the viewer's zone. */
+export const formatAxisTime = (value) =>
+  new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
 /** `1:24` — for the resend-code countdown. */
 export const formatCountdown = (totalSeconds) => {
   const safe = Math.max(0, Math.floor(totalSeconds));

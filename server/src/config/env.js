@@ -3,15 +3,14 @@ import { z } from 'zod';
 
 dotenv.config();
 
-/**
- * Environment is validated once at boot so the server fails fast and loudly
- * on a misconfigured deployment, instead of throwing `undefined` errors at
- * request time.
- */
+// Validated once at boot, so a misconfigured deployment fails immediately
+// rather than throwing undefined errors at request time.
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
-  CLIENT_URL: z.string().url().default('http://localhost:5173'),
+  CLIENT_URL: z.string().url().default('http://localhost:5174'),
+  // Absolute URL of this API, used to build links to locally stored uploads.
+  PUBLIC_URL: z.string().url().default('http://localhost:5000'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   // Read by Prisma for migrations only; optional, so a plain local Postgres
@@ -29,6 +28,27 @@ const envSchema = z.object({
 
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('Investment Portal <onboarding@resend.dev>'),
+
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+  CLOUDINARY_FOLDER: z.string().default('investment-portal'),
+
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
+
+  // Notional cash credited to an approved account. Real funding is out of scope,
+  // so this stands in for the customer's investable balance.
+  INVESTABLE_CREDIT: z.coerce.number().positive().default(1_000_000),
+
+  // Fund prices are simulated daily because there is no market behind this
+  // application. Turn off if a real price feed is ever wired in.
+  NAV_SIMULATION: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
+  // How often a new simulated price is published.
+  NAV_SIMULATION_INTERVAL_MINUTES: z.coerce.number().positive().default(5),
 
   EXPOSE_DEV_OTP: z
     .enum(['true', 'false'])
@@ -50,8 +70,5 @@ export const env = parsed.data;
 
 export const isProduction = env.NODE_ENV === 'production';
 
-/**
- * Echoing the OTP back in the API response is a development convenience only.
- * It is force-disabled in production regardless of what the env var says.
- */
+// Development convenience only, force-disabled in production.
 export const exposeDevOtp = env.EXPOSE_DEV_OTP && !isProduction;

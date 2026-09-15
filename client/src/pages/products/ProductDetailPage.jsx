@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi.js';
+import { LIVE_POLL_MS } from '@/lib/live.js';
 import { useAccountStatus } from '@/hooks/useAccountStatus.js';
 import * as productsApi from '@/api/products.api.js';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
@@ -8,6 +10,8 @@ import { Button } from '@/components/ui/Button.jsx';
 import { Alert } from '@/components/ui/Alert.jsx';
 import { Skeleton, ErrorState } from '@/components/ui/States.jsx';
 import { NavChart } from '@/components/charts/NavChart.jsx';
+import { IntradayChart } from '@/components/charts/IntradayChart.jsx';
+import { LiveDot, LivePrice } from '@/components/ui/Live.jsx';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format.js';
 import { cn } from '@/lib/cn.js';
 
@@ -42,10 +46,56 @@ function DetailSkeleton() {
   );
 }
 
+/** Switches the price chart between today's ticks and the daily record. */
+function RangeToggle({ value, onChange, intraday }) {
+  const options = [
+    { key: 'intraday', label: 'Today' },
+    { key: 'daily', label: '90 days' },
+  ];
+
+  return (
+    <div className="flex items-center gap-3">
+      {intraday ? (
+        <span
+          className={cn(
+            'tabular text-sm font-semibold',
+            intraday.changePct >= 0 ? 'text-gain' : 'text-loss',
+          )}
+        >
+          {formatPercent(intraday.changePct)}
+        </span>
+      ) : null}
+
+      <div className="flex rounded-lg bg-slate-100 p-0.5" role="group" aria-label="Chart range">
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={value === option.key}
+            onClick={() => onChange(option.key)}
+            className={cn(
+              'rounded-md px-2.5 py-1 text-xs font-medium transition',
+              value === option.key
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700',
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ProductDetailPage() {
   const { id } = useParams();
-  const { data, error, isLoading, refetch } = useApi(() => productsApi.getProduct(id), [id]);
+  const { data, error, isLoading, refetch } = useApi(() => productsApi.getProduct(id), [id], {
+    pollMs: LIVE_POLL_MS,
+  });
   const account = useAccountStatus();
+  // Declared before the early returns below, so the hook order stays constant.
+  const [range, setRange] = useState('intraday');
   const product = data?.product;
 
   if (isLoading) return <DetailSkeleton />;
@@ -65,6 +115,11 @@ export default function ProductDetailPage() {
 
   const performance = product.performance ?? {};
   const isUp = (performance.changePct ?? 0) >= 0;
+
+  // A fund only has an intraday series once the price simulation has published
+  // a few prices, so the daily chart stands in until then.
+  const hasIntraday = (product.navTicks?.length ?? 0) >= 2;
+  const showIntraday = hasIntraday && range === 'intraday';
 
   return (
     <>
@@ -95,9 +150,7 @@ export default function ProductDetailPage() {
           </div>
           <p className="mt-1 text-sm text-slate-600">
             {product.category} · Unit price{' '}
-            <span className="tabular font-semibold text-slate-900">
-              {formatNumber(product.currentNav, 4)}
-            </span>
+            <LivePrice value={product.currentNav} className="font-semibold text-slate-900" />
           </p>
         </div>
 
@@ -116,10 +169,48 @@ export default function ProductDetailPage() {
           <Card>
             <CardHeader
               title="Price history"
-              description="Daily net asset value per unit, from this fund's own record."
+              description={
+                showIntraday
+                  ? 'Every price published through the day.'
+                  : "Daily net asset value per unit, from this fund's own record."
+              }
+              action={
+                hasIntraday ? (
+                  <div className="flex shrink-0 items-center gap-3">
+                    {showIntraday ? <LiveDot /> : null}
+                    <RangeToggle value={range} onChange={setRange} intraday={product.intraday} />
+                  </div>
+                ) : null
+              }
             />
             <CardBody className="pl-2">
-              <NavChart data={product.navHistory} />
+              {showIntraday ? (
+                <IntradayChart data={product.navTicks} />
+              ) : (
+                <NavChart data={product.navHistory} />
+              )}
+
+              {showIntraday ? (
+                <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-slate-200 sm:grid-cols-4">
+                  {[
+                    { label: 'Open', value: product.intraday.openingNav },
+                    { label: 'High', value: product.intraday.highestNav },
+                    { label: 'Low', value: product.intraday.lowestNav },
+                    { label: 'Latest', value: product.intraday.currentNav, live: true },
+                  ].map((stat) => (
+                    <div key={stat.label} className="bg-white px-3 py-2.5">
+                      <dt className="text-xs font-medium text-slate-500">{stat.label}</dt>
+                      <dd className="tabular mt-0.5 text-sm font-semibold text-slate-900">
+                        {stat.live ? (
+                          <LivePrice value={stat.value} className="-ml-1" />
+                        ) : (
+                          formatNumber(stat.value, 4)
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
             </CardBody>
           </Card>
 

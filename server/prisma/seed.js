@@ -20,6 +20,18 @@ const prisma = new PrismaClient();
 
 const NAV_HISTORY_DAYS = 90;
 
+// A day of intraday prices at the five-minute cadence the running server uses,
+// so the intraday chart has something to draw immediately after a seed rather
+// than staying empty until the server has been up for a few hours.
+const TICK_INTERVAL_MINUTES = 5;
+const TICK_COUNT = (24 * 60) / TICK_INTERVAL_MINUTES;
+
+// Captured once so every fund's ticks land on the same instants, the way the
+// running simulation publishes them. Per-product clocks would scatter each
+// moment across three timestamps and triple the points on any chart that
+// combines funds.
+const SEED_NOW = Date.now();
+
 const DEMO_CUSTOMER = {
   fullName: 'Assessment User',
   email: 'assessment@example.com',
@@ -38,6 +50,8 @@ const PRODUCTS = [
       'An aggressive equity fund that invests in listed growth companies. Suited to investors with a long horizon who can tolerate short-term volatility in exchange for higher potential returns.',
     startingNav: 112.4,
     annualDrift: 0.185,
+    // Largest intraday step, matching the running simulation's own step size.
+    tickStep: 0.4,
     // Amplitude of the daily deviation from trend — the visible "choppiness"
     // of the line, scaled to the product's risk level.
     dailyVolatility: 0.012,
@@ -53,6 +67,7 @@ const PRODUCTS = [
       'A balanced fund holding corporate debt and dividend-paying equities. Aims to deliver a steady income stream with moderate capital growth and lower volatility than a pure equity fund.',
     startingNav: 104.8,
     annualDrift: 0.1225,
+    tickStep: 0.2,
     dailyVolatility: 0.0045,
   },
   {
@@ -66,6 +81,7 @@ const PRODUCTS = [
       'A capital-preservation fund invested in short-term government securities and bank deposits. The lowest risk option, intended for parking funds that may be needed at short notice.',
     startingNav: 101.2,
     annualDrift: 0.0875,
+    tickStep: 0.07,
     dailyVolatility: 0.0009,
   },
 ];
@@ -129,6 +145,39 @@ const buildNavSeries = (product) => {
   return series;
 };
 
+/**
+ * Intraday prices for the last 24 hours, landing exactly on today's NAV.
+ *
+ * A plain random walk would drift away from the published price and leave the
+ * intraday chart ending somewhere the daily chart disagrees with. Subtracting a
+ * linear ramp pins the path to both known endpoints — a Brownian bridge — so
+ * the day opens at yesterday's close and closes on today's NAV, with a genuine
+ * wander in between.
+ */
+const buildTickSeries = (product, openingNav, closingNav) => {
+  const rng = createRng(`${product.code}-intraday`);
+
+  const walk = [];
+  let position = 0;
+  for (let index = 0; index < TICK_COUNT; index += 1) {
+    position += (rng() - 0.5) * 2 * product.tickStep;
+    walk.push(position);
+  }
+
+  const drift = walk[TICK_COUNT - 1];
+
+  return walk.map((value, index) => {
+    const progress = (index + 1) / TICK_COUNT;
+    const nav = openingNav + (closingNav - openingNav) * progress + (value - drift * progress);
+    const minutesAgo = (TICK_COUNT - 1 - index) * TICK_INTERVAL_MINUTES;
+
+    return {
+      recordedAt: new Date(SEED_NOW - minutesAgo * 60 * 1000),
+      nav: round(nav, 4),
+    };
+  });
+};
+
 const seedProducts = async () => {
   const seeded = [];
 
@@ -171,8 +220,23 @@ const seedProducts = async () => {
       })),
     });
 
+    const previousClose = series.length > 1 ? series[series.length - 2].nav : currentNav;
+    const ticks = buildTickSeries(product, previousClose, currentNav);
+
+    await prisma.productNavTick.deleteMany({ where: { productId: record.id } });
+    await prisma.productNavTick.createMany({
+      data: ticks.map((tick) => ({
+        productId: record.id,
+        recordedAt: tick.recordedAt,
+        nav: tick.nav,
+      })),
+    });
+
     seeded.push({ ...record, series });
-    console.info(`  ${product.name.padEnd(20)} NAV ${currentNav}  (${series.length} days of history)`);
+    console.info(
+      `  ${product.name.padEnd(20)} NAV ${currentNav}  ` +
+        `(${series.length} days of history, ${ticks.length} intraday points)`,
+    );
   }
 
   return seeded;

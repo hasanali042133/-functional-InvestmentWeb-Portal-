@@ -36,7 +36,6 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    // P2002 — unique constraint violation
     if (err.code === 'P2002') {
       const field = err.meta?.target?.[0] ?? 'value';
       return sendError(res, {
@@ -45,7 +44,6 @@ export const errorHandler = (err, req, res, next) => {
         code: 'DUPLICATE_VALUE',
       });
     }
-    // P2025 — record required for the operation was not found
     if (err.code === 'P2025') {
       return sendError(res, {
         status: 404,
@@ -63,7 +61,7 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Anything else is unexpected: log it for us, stay generic for the client.
+  // Unexpected: logged for us, generic for the client.
   console.error('[unhandled error]', err);
 
   return sendError(res, {

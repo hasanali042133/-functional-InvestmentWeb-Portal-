@@ -4,7 +4,6 @@ import { sendError } from '../utils/apiResponse.js';
 const handler = (message, code) => (req, res) =>
   sendError(res, { status: 429, message, code });
 
-/** Broad ceiling applied to the whole API. */
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -13,7 +12,7 @@ export const globalLimiter = rateLimit({
   handler: handler('Too many requests. Please slow down.', 'RATE_LIMITED'),
 });
 
-/** Tighter limit on credential endpoints to blunt brute-force attempts. */
+// Tighter on credential endpoints, to blunt brute-force attempts.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -26,24 +25,15 @@ export const authLimiter = rateLimit({
   ),
 });
 
-/**
- * OTP endpoints are limited per email address rather than per IP.
- *
- * Keying on the IP would mean one customer fumbling their code could lock out
- * everyone else behind the same office or mobile-carrier NAT. The email address
- * is the actual subject being protected here, and the coarse per-IP ceiling is
- * still enforced by `globalLimiter`.
- *
- * The real controls remain in the OTP service: a resend cooldown and a
- * per-code attempt counter.
- */
+// Keyed per email rather than per IP: one customer fumbling their code should
+// not lock out everyone behind the same office or carrier NAT. The per-IP
+// ceiling is still enforced by globalLimiter.
 export const otpLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    // Runs before validation, so normalise defensively.
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     return email ? `otp:${email}` : `otp-ip:${req.ip}`;
   },

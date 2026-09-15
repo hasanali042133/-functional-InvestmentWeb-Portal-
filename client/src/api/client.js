@@ -90,11 +90,14 @@ api.interceptors.response.use(
       status,
     });
 
-    // An expired or invalid token means the stored session is no longer usable.
-    // Being unverified is different: the customer is known, they just have a
-    // step left, so that case is handled by the screen instead.
-    const sessionGone =
-      status === 401 || (status === 403 && apiError.code !== 'EMAIL_NOT_VERIFIED');
+    // Only a 401 means the stored token itself is no longer usable — it is
+    // missing, expired, invalid, or the account behind it is gone.
+    //
+    // A 403 is the opposite case: the token is fine and the customer is known,
+    // they just have a step left before this particular action is allowed
+    // (EMAIL_NOT_VERIFIED, ACCOUNT_NOT_APPROVED). Signing them out there would
+    // throw them to the login screen instead of to the step they need.
+    const sessionGone = status === 401;
 
     if (sessionGone && tokenStore.get()) {
       tokenStore.clear();

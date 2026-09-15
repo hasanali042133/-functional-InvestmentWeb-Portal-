@@ -3,11 +3,8 @@ import { env } from '../config/env.js';
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
-/**
- * Without a RESEND_API_KEY the service falls back to logging the message.
- * That keeps local development working with no external account, and makes a
- * misconfigured production deploy obvious in the logs rather than silent.
- */
+// Without a RESEND_API_KEY the message is logged instead of sent, so local
+// development needs no external account and a misconfigured deploy is visible.
 const deliver = async ({ to, subject, html, text, preview }) => {
   if (!resend) {
     console.info(
@@ -29,8 +26,7 @@ const deliver = async ({ to, subject, html, text, preview }) => {
   });
 
   if (error) {
-    // A failed email must not fail the whole request — the user can always ask
-    // for a new code — but it does need to be visible to us.
+    // A failed send must not fail the request; the customer can ask for a new code.
     console.error('[email] delivery failed', error);
     return { delivered: false, reason: error.message ?? 'SEND_FAILED' };
   }

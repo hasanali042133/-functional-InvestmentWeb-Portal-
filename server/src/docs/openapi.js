@@ -85,7 +85,9 @@ const ProductDetail = {
         },
         navHistory: {
           type: 'array',
-          description: 'Daily price series used to draw the performance chart.',
+          description:
+            'Daily price series used to draw the performance chart. One point per day, ' +
+            'date-only so the chart is not shifted by the viewer timezone.',
           items: {
             type: 'object',
             properties: {
@@ -94,9 +96,139 @@ const ProductDetail = {
             },
           },
         },
+        intraday: {
+          type: 'object',
+          nullable: true,
+          description:
+            'Summary of the intraday feed over the returned window. Null until at least ' +
+            'two prices have been published.',
+          properties: {
+            points: { type: 'integer', example: 288 },
+            from: { type: 'string', format: 'date-time' },
+            to: { type: 'string', format: 'date-time' },
+            openingNav: { type: 'number', example: 116.4492 },
+            currentNav: { type: 'number', example: 117.5928 },
+            highestNav: { type: 'number', example: 118.2774 },
+            lowestNav: { type: 'number', example: 114.8692 },
+            changePct: { type: 'number', example: 0.98 },
+          },
+        },
+        navTicks: {
+          type: 'array',
+          description:
+            'Intraday prices for the last 24 hours, oldest first. Full timestamps rather ' +
+            'than dates: an intraday chart is about time of day, so it is drawn in the ' +
+            'viewer own timezone. Older ticks are pruned; the daily series above is what ' +
+            'survives as history.',
+          items: {
+            type: 'object',
+            properties: {
+              at: { type: 'string', format: 'date-time', example: '2026-09-15T14:47:15.258Z' },
+              nav: { type: 'number', example: 117.5928 },
+            },
+          },
+        },
       },
     },
   ],
+};
+
+const Application = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    status: { type: 'string', enum: ['DRAFT', 'SUBMITTED', 'APPROVED'] },
+    fullName: { type: 'string', nullable: true, example: 'Assessment User' },
+    fatherName: { type: 'string', nullable: true },
+    dateOfBirth: { type: 'string', format: 'date', nullable: true, example: '1994-03-18' },
+    gender: { type: 'string', enum: ['MALE', 'FEMALE', 'OTHER'], nullable: true },
+    cnic: { type: 'string', nullable: true, example: '42101-1234567-1' },
+    mobile: { type: 'string', nullable: true, example: '03001234567' },
+    email: { type: 'string', format: 'email', nullable: true },
+    maritalStatus: {
+      type: 'string',
+      enum: ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED'],
+      nullable: true,
+    },
+    addressLine1: { type: 'string', nullable: true },
+    city: { type: 'string', nullable: true },
+    province: { type: 'string', nullable: true },
+    country: { type: 'string', nullable: true },
+    postalCode: { type: 'string', nullable: true },
+    employmentStatus: {
+      type: 'string',
+      enum: ['SALARIED', 'SELF_EMPLOYED', 'BUSINESS', 'STUDENT', 'RETIRED', 'UNEMPLOYED'],
+      nullable: true,
+    },
+    occupation: { type: 'string', nullable: true },
+    employerName: { type: 'string', nullable: true },
+    monthlyIncome: { type: 'number', nullable: true, example: 450000 },
+    sourceOfIncome: { type: 'string', nullable: true },
+    expectedInvestmentAmount: { type: 'number', nullable: true, example: 500000 },
+    investmentObjective: { type: 'string', nullable: true },
+    riskProfile: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'], nullable: true },
+    investmentExperience: { type: 'string', nullable: true },
+    investmentFrequency: { type: 'string', nullable: true },
+    termsAccepted: { type: 'boolean' },
+    submittedAt: { type: 'string', format: 'date-time', nullable: true },
+    approvedAt: { type: 'string', format: 'date-time', nullable: true },
+  },
+};
+
+const Document = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    type: { type: 'string', enum: ['CNIC_FRONT', 'CNIC_BACK', 'PROOF_OF_ADDRESS'] },
+    url: { type: 'string', format: 'uri' },
+    mimeType: { type: 'string', example: 'image/jpeg' },
+    sizeBytes: { type: 'integer', example: 184320 },
+    isCropped: { type: 'boolean' },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
+};
+
+const Holding = {
+  type: 'object',
+  properties: {
+    productId: { type: 'string', format: 'uuid' },
+    productName: { type: 'string', example: 'Growth Fund' },
+    riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    units: { type: 'number', example: 904.774313 },
+    invested: { type: 'number', example: 100000 },
+    currentValue: { type: 'number', example: 106358.12 },
+    gain: { type: 'number', example: 6358.12 },
+    gainPct: { type: 'number', example: 6.36 },
+    sharePct: { type: 'number', example: 58.6 },
+  },
+};
+
+const Transaction = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    txnRef: { type: 'string', example: 'INV-7QK2M9XD' },
+    productId: { type: 'string', format: 'uuid' },
+    productName: { type: 'string', example: 'Growth Fund' },
+    investmentId: { type: 'string', format: 'uuid', nullable: true },
+    type: { type: 'string', enum: ['INVESTMENT', 'REDEMPTION'] },
+    amount: { type: 'number', example: 50000 },
+    status: { type: 'string', enum: ['PENDING', 'COMPLETED', 'FAILED'] },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
+};
+
+const Investment = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    productId: { type: 'string', format: 'uuid' },
+    productName: { type: 'string' },
+    amountInvested: { type: 'number', example: 50000 },
+    units: { type: 'number', example: 425.3433 },
+    navAtPurchase: { type: 'number', example: 117.5521 },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
 };
 
 const ErrorResponse = {
@@ -133,6 +265,12 @@ const jsonError = (description, example) => ({
   },
 });
 
+const unauthorized = jsonError('Not signed in, or the session has expired', {
+  success: false,
+  message: 'Please sign in to continue.',
+  code: 'MISSING_TOKEN',
+});
+
 const validationError = jsonError('Validation failed', {
   success: false,
   message: 'Please correct the highlighted fields.',
@@ -165,7 +303,9 @@ export const openApiSpec = {
   tags: [
     { name: 'System', description: 'Service status' },
     { name: 'Authentication', description: 'Registration, email OTP verification and sign in' },
+    { name: 'Account', description: 'Account opening application and identity documents' },
     { name: 'Products', description: 'The investment products a customer can buy' },
+    { name: 'Investing', description: 'Investments, transactions and portfolio' },
   ],
   components: {
     securitySchemes: {
@@ -176,7 +316,18 @@ export const openApiSpec = {
         description: 'Paste the `token` returned by login or verify-otp.',
       },
     },
-    schemas: { User, Verification, Product, ProductDetail, ErrorResponse },
+    schemas: {
+      User,
+      Verification,
+      Product,
+      ProductDetail,
+      Application,
+      Document,
+      Holding,
+      Transaction,
+      Investment,
+      ErrorResponse,
+    },
   },
   paths: {
     '/health': {
@@ -528,6 +679,501 @@ export const openApiSpec = {
             code: 'VALIDATION_ERROR',
             errors: [{ field: 'id', message: 'That is not a valid product id.' }],
           }),
+        },
+      },
+    },
+
+    '/api/account/application': {
+      get: {
+        tags: ['Account'],
+        summary: 'Get the account opening application',
+        description: 'An empty draft is created on first access, so this never 404s.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Application and uploaded documents',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    application: { $ref: '#/components/schemas/Application' },
+                    documents: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Document' },
+                    },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+        },
+      },
+      put: {
+        tags: ['Account'],
+        summary: 'Save part of the application',
+        description:
+          'Send only the fields being saved. Every field is optional here — completeness is enforced on submit — so a long form can be filled in over several sittings. Unknown fields are rejected.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Application' },
+              example: {
+                fullName: 'Assessment User',
+                cnic: '42101-1234567-1',
+                mobile: '03001234567',
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Progress saved',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    application: { $ref: '#/components/schemas/Application' },
+                    documents: { type: 'array', items: { $ref: '#/components/schemas/Document' } },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+          409: jsonError('Account already approved', {
+            success: false,
+            message: 'Your account has already been approved and can no longer be edited.',
+            code: 'APPLICATION_LOCKED',
+          }),
+          422: validationError,
+        },
+      },
+    },
+
+    '/api/account/status': {
+      get: {
+        tags: ['Account'],
+        summary: 'Get the account opening status',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Status',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    status: { type: 'string', enum: ['DRAFT', 'SUBMITTED', 'APPROVED'] },
+                    canInvest: { type: 'boolean' },
+                    submittedAt: { type: 'string', format: 'date-time', nullable: true },
+                    approvedAt: { type: 'string', format: 'date-time', nullable: true },
+                    documentsUploaded: { type: 'integer', example: 2 },
+                    documentsRequired: { type: 'integer', example: 3 },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+        },
+      },
+    },
+
+    '/api/account/documents': {
+      post: {
+        tags: ['Account'],
+        summary: 'Upload an identity document',
+        description:
+          'One document per type; uploading the same type again replaces it. Files are checked against their magic bytes, not just the declared content type.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['type', 'file'],
+                properties: {
+                  type: {
+                    type: 'string',
+                    enum: ['CNIC_FRONT', 'CNIC_BACK', 'PROOF_OF_ADDRESS'],
+                  },
+                  isCropped: { type: 'string', enum: ['true', 'false'], default: 'false' },
+                  file: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'JPG, PNG, WebP or PDF, up to 5 MB.',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Document stored',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: { document: { $ref: '#/components/schemas/Document' } },
+                }),
+              },
+            },
+          },
+          400: jsonError('Rejected file — UNSUPPORTED_FILE_TYPE, FILE_TYPE_MISMATCH or FILE_REQUIRED', {
+            success: false,
+            message: 'That file does not look like the type it claims to be.',
+            code: 'FILE_TYPE_MISMATCH',
+          }),
+          401: unauthorized,
+          409: jsonError('Account already approved', {
+            success: false,
+            message: 'Your account has already been approved and its documents can no longer be changed.',
+            code: 'APPLICATION_LOCKED',
+          }),
+          413: jsonError('File too large', {
+            success: false,
+            message: 'That file is too large. The limit is 5 MB.',
+            code: 'FILE_TOO_LARGE',
+          }),
+          503: jsonError('Storage not configured', {
+            success: false,
+            message: 'Document uploads are not available right now.',
+            code: 'STORAGE_NOT_CONFIGURED',
+          }),
+        },
+      },
+    },
+
+    '/api/account/documents/{id}': {
+      delete: {
+        tags: ['Account'],
+        summary: 'Remove an uploaded document',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Document removed' },
+          401: unauthorized,
+          404: jsonError('Not found, or not yours', {
+            success: false,
+            message: 'That document was not found.',
+            code: 'DOCUMENT_NOT_FOUND',
+          }),
+        },
+      },
+    },
+
+    '/api/account/submit': {
+      post: {
+        tags: ['Account'],
+        summary: 'Submit the application for approval',
+        description:
+          'Re-validates every field and checks all three documents are present, then approves automatically. The checks are the gate: an incomplete application cannot be approved by calling this directly.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Approved',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: {
+                      application: { $ref: '#/components/schemas/Application' },
+                      documents: { type: 'array', items: { $ref: '#/components/schemas/Document' } },
+                    },
+                  },
+                  { message: 'Your account has been approved. You can now start investing.' },
+                ),
+              },
+            },
+          },
+          400: jsonError(
+            'Not ready — APPLICATION_INCOMPLETE, APPLICATION_INVALID, DOCUMENTS_MISSING or TERMS_NOT_ACCEPTED',
+            {
+              success: false,
+              message: 'Please upload all required documents.',
+              code: 'DOCUMENTS_MISSING',
+              errors: [{ field: 'PROOF_OF_ADDRESS', message: 'This document is required.' }],
+            },
+          ),
+          401: unauthorized,
+          409: jsonError('Already approved', {
+            success: false,
+            message: 'Your account has already been approved.',
+            code: 'ALREADY_APPROVED',
+          }),
+        },
+      },
+    },
+
+    '/api/investments': {
+      post: {
+        tags: ['Investing'],
+        summary: 'Invest in a fund',
+        description:
+          'Creates the holding and its transaction in one database transaction, so a half-recorded investment cannot exist. Units are the amount divided by the current NAV.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['productId', 'amount'],
+                properties: {
+                  productId: { type: 'string', format: 'uuid' },
+                  amount: { type: 'number', example: 50000 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Investment recorded',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    investment: { $ref: '#/components/schemas/Investment' },
+                    transaction: { $ref: '#/components/schemas/Transaction' },
+                  },
+                }),
+              },
+            },
+          },
+          400: jsonError('BELOW_MINIMUM_INVESTMENT or INSUFFICIENT_BALANCE', {
+            success: false,
+            message: 'The minimum investment in Growth Fund is PKR 5,000.',
+            code: 'BELOW_MINIMUM_INVESTMENT',
+          }),
+          401: unauthorized,
+          403: jsonError('Account not approved yet', {
+            success: false,
+            message: 'Complete your account opening before investing.',
+            code: 'ACCOUNT_NOT_APPROVED',
+          }),
+          404: jsonError('No such product', {
+            success: false,
+            message: 'That investment product is not available.',
+            code: 'PRODUCT_NOT_FOUND',
+          }),
+          422: validationError,
+        },
+      },
+      get: {
+        tags: ['Investing'],
+        summary: "List the customer's investments",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Investments',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    investments: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Investment' },
+                    },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+        },
+      },
+    },
+
+    '/api/transactions': {
+      get: {
+        tags: ['Investing'],
+        summary: 'List transactions, newest first',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1, minimum: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Transactions',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    transactions: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Transaction' },
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        page: { type: 'integer', example: 1 },
+                        limit: { type: 'integer', example: 10 },
+                        total: { type: 'integer', example: 3 },
+                        totalPages: { type: 'integer', example: 1 },
+                      },
+                    },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+        },
+      },
+    },
+
+    '/api/portfolio/summary': {
+      get: {
+        tags: ['Investing'],
+        summary: 'Portfolio totals and holdings',
+        description:
+          'Every value is derived: units held multiplied by the current NAV. Nothing about a holding’s worth is stored, so a price change is reflected everywhere at once.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Summary',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    totalInvested: { type: 'number', example: 175000 },
+                    currentValue: { type: 'number', example: 181705.8 },
+                    totalGain: { type: 'number', example: 6705.8 },
+                    gainPct: { type: 'number', example: 3.83 },
+                    investmentCount: { type: 'integer', example: 3 },
+                    availableBalance: {
+                      type: 'number',
+                      example: 825000,
+                      description:
+                        'Notional credit less the amount invested. Real funding is out of scope for this build.',
+                    },
+                    holdings: { type: 'array', items: { $ref: '#/components/schemas/Holding' } },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+        },
+      },
+    },
+
+    '/api/portfolio/performance': {
+      get: {
+        tags: ['Investing'],
+        summary: 'Portfolio value over time, against the amount invested',
+        description:
+          'Two series rather than one: value alone rises whenever money is added, so the gap between them is what shows performance. `granularity` says which shape the points take — `daily` points carry a `date` and are valued at each day’s published NAV; `intraday` points carry an ISO `at` timestamp and are valued at every published tick. A portfolio opened within the last 48 hours is returned intraday, because a single day plots as one dot.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Time series',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    granularity: { type: 'string', enum: ['daily', 'intraday'], example: 'daily' },
+                    series: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          date: {
+                            type: 'string',
+                            format: 'date',
+                            example: '2026-09-14',
+                            description: 'Daily series only.',
+                          },
+                          at: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Intraday series only.',
+                          },
+                          value: { type: 'number', example: 181705.8 },
+                          invested: { type: 'number', example: 175000 },
+                        },
+                      },
+                    },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
+        },
+      },
+    },
+
+    '/api/portfolio/risk': {
+      get: {
+        tags: ['Investing'],
+        summary: 'How risky the portfolio is, against the declared risk profile',
+        description:
+          'Each fund’s risk level weighted by what that holding is worth today, scored from 1 (entirely low risk) to 3 (entirely high risk). Compared against the risk profile the customer chose during account opening, so a portfolio that has drifted away from what they signed up for is visible. `alignment` is `ABOVE` when they are carrying more risk than they declared.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Risk analysis. Every field is null until the customer holds something.',
+            content: {
+              'application/json': {
+                schema: envelope({
+                  type: 'object',
+                  properties: {
+                    score: { type: 'number', nullable: true, example: 2.48 },
+                    level: {
+                      type: 'string',
+                      nullable: true,
+                      enum: ['LOW', 'MEDIUM', 'HIGH'],
+                      example: 'HIGH',
+                    },
+                    statedProfile: {
+                      type: 'string',
+                      nullable: true,
+                      enum: ['LOW', 'MEDIUM', 'HIGH'],
+                      example: 'MEDIUM',
+                      description: 'Taken from the account opening application.',
+                    },
+                    alignment: {
+                      type: 'string',
+                      nullable: true,
+                      enum: ['BELOW', 'ALIGNED', 'ABOVE'],
+                      example: 'ABOVE',
+                    },
+                    breakdown: {
+                      type: 'array',
+                      description: 'Exposure by risk level, low to high.',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          riskLevel: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+                          value: { type: 'number', example: 116358.12 },
+                          sharePct: { type: 'number', example: 60.7 },
+                        },
+                      },
+                    },
+                  },
+                }),
+              },
+            },
+          },
+          401: unauthorized,
         },
       },
     },

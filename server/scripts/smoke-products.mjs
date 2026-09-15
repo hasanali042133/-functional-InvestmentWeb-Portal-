@@ -76,7 +76,13 @@ const detail = await call(`/api/products/${growth.id}`, { token });
 const product = detail.body.data?.product;
 
 check('returns the product', detail.status === 200 && product?.code === 'GROWTH');
-check('includes 90 days of history', product?.navHistory?.length === 90, `${product?.navHistory?.length} points`);
+// The seed lays down 90 days; the price simulator then publishes one row per
+// day on top of that, so this is a floor rather than an exact count.
+check(
+  'includes at least 90 days of history',
+  product?.navHistory?.length >= 90,
+  `${product?.navHistory?.length} points`,
+);
 check(
   'history is date-only and ascending',
   /^\d{4}-\d{2}-\d{2}$/.test(product.navHistory[0].date) &&
@@ -105,6 +111,55 @@ check(
   'growth fund trends upward over the period',
   perf.changePct > 0,
   `${perf.changePct}%`,
+);
+
+console.log('\n=== INTRADAY ===');
+const ticks = product.navTicks ?? [];
+const intraday = product.intraday;
+
+check('detail includes an intraday series', ticks.length >= 2, `${ticks.length} ticks`);
+
+check(
+  'ticks carry full timestamps, not dates',
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(ticks[0]?.at ?? ''),
+  ticks[0]?.at,
+);
+
+check(
+  'ticks are in chronological order',
+  ticks.every((tick, i) => i === 0 || new Date(ticks[i - 1].at) <= new Date(tick.at)),
+);
+
+check(
+  'the last tick is the current NAV',
+  ticks.at(-1).nav === product.currentNav,
+  `${ticks.at(-1).nav} vs ${product.currentNav}`,
+);
+
+check(
+  'intraday ticks leave the daily series alone',
+  product.navHistory.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date)) &&
+    product.navHistory.at(-1).nav === product.currentNav,
+  `${product.navHistory.length} daily points, one per day`,
+);
+
+check('includes an intraday summary', Boolean(intraday), intraday ? `${intraday.points} points` : '');
+
+check(
+  'intraday high and low bound the series',
+  intraday.highestNav >= product.currentNav && intraday.lowestNav <= product.currentNav,
+  `${intraday.lowestNav} .. ${intraday.highestNav}`,
+);
+
+check(
+  'intraday summary matches the series it describes',
+  intraday.openingNav === ticks[0].nav && intraday.currentNav === ticks.at(-1).nav,
+);
+
+check(
+  'intraday window is at most 24 hours',
+  new Date(intraday.to) - new Date(intraday.from) <= 24 * 60 * 60 * 1000 + 60000,
+  `${((new Date(intraday.to) - new Date(intraday.from)) / 3600000).toFixed(1)}h`,
 );
 
 console.log('\n=== ERRORS ===');

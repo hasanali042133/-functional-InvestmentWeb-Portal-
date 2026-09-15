@@ -48,7 +48,7 @@ export function FinancialStep({ defaultValues, onSubmit, onBack, isSaving, serve
         <Input
           label="Occupation"
           required
-          placeholder="Software engineer"
+          placeholder="Enter your occupation"
           error={errors.occupation?.message}
           {...register('occupation')}
         />
@@ -57,7 +57,7 @@ export function FinancialStep({ defaultValues, onSubmit, onBack, isSaving, serve
           <Input
             label="Employer name"
             required={employmentStatus === 'SALARIED'}
-            placeholder="Company you work for"
+            placeholder="Enter employer name"
             error={errors.employerName?.message}
             {...register('employerName')}
           />
@@ -76,7 +76,7 @@ export function FinancialStep({ defaultValues, onSubmit, onBack, isSaving, serve
           required
           min={0}
           step={1000}
-          placeholder="150000"
+          placeholder="Enter monthly income"
           error={errors.monthlyIncome?.message}
           {...register('monthlyIncome')}
         />
@@ -86,8 +86,7 @@ export function FinancialStep({ defaultValues, onSubmit, onBack, isSaving, serve
           required
           min={1000}
           step={1000}
-          placeholder="500000"
-          hint="Roughly how much you expect to invest in a year"
+          placeholder="Enter expected amount"
           error={errors.expectedInvestmentAmount?.message}
           {...register('expectedInvestmentAmount')}
         />

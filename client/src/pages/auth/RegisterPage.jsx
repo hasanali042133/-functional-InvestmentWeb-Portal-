@@ -85,7 +85,7 @@ export default function RegisterPage() {
           label="Full name"
           required
           autoComplete="name"
-          placeholder="Hasan Ali"
+          placeholder="Enter your full name"
           error={errors.fullName?.message}
           {...register('fullName')}
         />
@@ -95,7 +95,7 @@ export default function RegisterPage() {
           type="email"
           required
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder="Enter your email address"
           error={errors.email?.message}
           {...register('email')}
         />
@@ -105,7 +105,7 @@ export default function RegisterPage() {
             label="Password"
             required
             autoComplete="new-password"
-            placeholder="Choose a strong password"
+            placeholder="Enter a password"
             error={errors.password?.message}
             {...register('password')}
           />

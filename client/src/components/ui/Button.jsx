@@ -18,9 +18,12 @@ const SIZES = {
   lg: 'h-12 px-6 text-base gap-2',
 };
 
+// A press that visibly gives way makes a button feel connected to the click.
+// It is suppressed while disabled, where nothing is going to happen anyway.
 const base =
-  'inline-flex items-center justify-center rounded-lg font-semibold transition-colors ' +
-  'disabled:cursor-not-allowed select-none';
+  'inline-flex items-center justify-center rounded-lg font-semibold select-none ' +
+  'transition duration-150 active:scale-[0.98] disabled:active:scale-100 ' +
+  'disabled:cursor-not-allowed';
 
 /**
  * One button for the whole app.

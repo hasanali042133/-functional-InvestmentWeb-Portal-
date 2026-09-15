@@ -7,7 +7,6 @@ import { issueOtp, consumeOtp } from './otp.service.js';
 import { sendOtpEmail } from './email.service.js';
 import { signAccessToken } from './token.service.js';
 
-/** Issues a code, emails it, and returns the payload the API should respond with. */
 const dispatchVerificationCode = async (user) => {
   const { code, expiresAt } = await issueOtp({ userId: user.id });
 
@@ -23,19 +22,13 @@ const dispatchVerificationCode = async (user) => {
     expiresAt,
     resendAfterSeconds: env.OTP_RESEND_COOLDOWN_SECONDS,
     emailDelivered: delivery.delivered,
-    // Development-only escape hatch, force-disabled in production.
     ...(exposeDevOtp ? { devOtp: code } : {}),
   };
 };
 
-/**
- * Creates an unverified account and sends the first verification code.
- *
- * Signing up again with an email that exists but was never verified is treated
- * as "I mistyped something, let me start over": the details are updated and a
- * fresh code is sent, rather than dead-ending the customer on a duplicate-email
- * error for an account they can't log into.
- */
+// Signing up again on an unverified email updates the details and resends,
+// rather than dead-ending the customer on a duplicate-email error for an
+// account they cannot sign into.
 export const registerUser = async ({ fullName, email, password }) => {
   const existing = await prisma.user.findUnique({ where: { email } });
 
@@ -65,7 +58,6 @@ export const registerUser = async ({ fullName, email, password }) => {
   };
 };
 
-/** Verifies the emailed code, activates the account and signs the customer in. */
 export const verifyEmail = async ({ email, code }) => {
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -93,7 +85,6 @@ export const verifyEmail = async ({ email, code }) => {
   };
 };
 
-/** Sends a new verification code to an account that has not been verified yet. */
 export const resendVerificationCode = async ({ email }) => {
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -111,12 +102,8 @@ export const resendVerificationCode = async ({ email }) => {
   return dispatchVerificationCode(user);
 };
 
-/**
- * Authenticates a customer.
- *
- * A missing account and a wrong password return the identical message so the
- * endpoint cannot be used to discover which email addresses are registered.
- */
+// A missing account and a wrong password answer identically, so this endpoint
+// cannot be used to discover which addresses are registered.
 export const loginUser = async ({ email, password }) => {
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -126,8 +113,7 @@ export const loginUser = async ({ email, password }) => {
   );
 
   if (!user) {
-    // Hash anyway so a non-existent account does not answer measurably faster
-    // than an existing one.
+    // Hash anyway, so a missing account does not answer measurably faster.
     await bcrypt.compare(password, '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva');
     throw invalidCredentials;
   }
@@ -138,8 +124,6 @@ export const loginUser = async ({ email, password }) => {
   }
 
   if (!user.isEmailVerified) {
-    // The email is echoed back so the client can send the customer straight to
-    // the verification screen with the field pre-filled.
     throw new AppError(
       403,
       'Please verify your email address before signing in.',

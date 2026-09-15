@@ -29,7 +29,7 @@ export function AddressStep({ defaultValues, onSubmit, onBack, isSaving, serverE
         label="Residential address"
         required
         rows={3}
-        placeholder="House / flat number, street, area"
+        placeholder="Enter your address"
         error={errors.addressLine1?.message}
         {...register('addressLine1')}
       />
@@ -39,7 +39,7 @@ export function AddressStep({ defaultValues, onSubmit, onBack, isSaving, serverE
           label="City"
           required
           autoComplete="address-level2"
-          placeholder="Karachi"
+          placeholder="Enter your city"
           error={errors.city?.message}
           {...register('city')}
         />
@@ -64,7 +64,7 @@ export function AddressStep({ defaultValues, onSubmit, onBack, isSaving, serverE
           label="Postal code"
           required
           inputMode="numeric"
-          placeholder="75600"
+          placeholder="Enter postal code"
           error={errors.postalCode?.message}
           {...register('postalCode')}
         />

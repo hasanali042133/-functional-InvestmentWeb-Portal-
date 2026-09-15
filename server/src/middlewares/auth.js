@@ -3,13 +3,6 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/apiResponse.js';
 import { verifyAccessToken } from '../services/token.service.js';
 
-/**
- * Verifies the bearer token and attaches the current user to `req.user`.
- *
- * The user is re-read from the database on every request rather than trusted
- * from the token payload, so a deleted or de-verified account stops working
- * immediately instead of when its token happens to expire.
- */
 export const requireAuth = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization ?? '';
 
@@ -26,23 +19,20 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   try {
     payload = verifyAccessToken(token);
   } catch (error) {
-    const code = error?.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN';
-    const message =
-      code === 'TOKEN_EXPIRED'
+    const expired = error?.name === 'TokenExpiredError';
+    throw AppError.unauthorized(
+      expired
         ? 'Your session has expired. Please sign in again.'
-        : 'Your session is not valid. Please sign in again.';
-    throw AppError.unauthorized(message, code);
+        : 'Your session is not valid. Please sign in again.',
+      expired ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN',
+    );
   }
 
+  // Read fresh rather than trusting the token payload, so a deleted or
+  // de-verified account stops working immediately.
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      isEmailVerified: true,
-      createdAt: true,
-    },
+    select: { id: true, fullName: true, email: true, isEmailVerified: true, createdAt: true },
   });
 
   if (!user) {

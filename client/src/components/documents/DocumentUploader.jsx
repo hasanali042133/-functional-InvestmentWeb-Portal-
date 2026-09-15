@@ -8,18 +8,19 @@ import { validateFile, formatFileSize } from '@/lib/cropImage.js';
 import { cn } from '@/lib/cn.js';
 
 /**
- * One document slot: choose a file, preview it, optionally crop it, upload it,
- * and replace or remove it afterwards.
+ * One document slot.
  *
- * Selecting a file does not upload it — the customer gets to look at the
- * preview, and crop it, before anything leaves the device.
+ * Choosing a file uploads it. An identity card goes through the crop dialog
+ * first, because a photographed card almost always has the desk in frame, but
+ * the upload still happens without a second button press — a file sitting in
+ * the slot looking uploaded while the counter says otherwise is worse than no
+ * preview step at all.
  */
 export function DocumentUploader({ definition, document, onUploaded, onRemoved }) {
   const inputRef = useRef(null);
 
-  const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [wasCropped, setWasCropped] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
   const [error, setError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -27,42 +28,62 @@ export function DocumentUploader({ definition, document, onUploaded, onRemoved }
   const [cropOpen, setCropOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Object URLs hold memory until they are revoked.
   useEffect(() => {
     if (!previewUrl) return undefined;
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
-  const isPdf = file?.type === 'application/pdf';
-  const canCrop = definition.croppable && file && !isPdf;
-
-  const clearSelection = () => {
-    setFile(null);
+  const reset = () => {
+    setPendingFile(null);
     setPreviewUrl(null);
-    setWasCropped(false);
+    setCropOpen(false);
     setProgress(0);
     if (inputRef.current) inputRef.current.value = '';
   };
 
-  const acceptFile = (candidate) => {
-    if (!candidate) return;
+  const upload = async (file, isCropped) => {
+    setIsUploading(true);
+    setCropOpen(false);
+    setError(null);
+    setProgress(0);
 
-    const problem = validateFile(candidate);
+    try {
+      const data = await accountApi.uploadDocument({
+        type: definition.type,
+        file,
+        isCropped,
+        onProgress: setProgress,
+      });
+      reset();
+      onUploaded(data.document);
+    } catch (caught) {
+      setError(caught.message);
+      reset();
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const acceptFile = (file) => {
+    if (!file) return;
+
+    const problem = validateFile(file);
     if (problem) {
       setError(problem);
       return;
     }
 
     setError(null);
-    setFile(candidate);
-    setWasCropped(false);
-    setPreviewUrl(URL.createObjectURL(candidate));
 
-    // Identity cards are almost always photographed with the desk in frame, so
-    // offer the crop straight away rather than waiting to be asked.
-    if (definition.croppable && candidate.type !== 'application/pdf') {
-      setCropOpen(true);
+    // A PDF cannot be cropped, and neither can a proof of address.
+    if (!definition.croppable || file.type === 'application/pdf') {
+      upload(file, false);
+      return;
     }
+
+    setPendingFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setCropOpen(true);
   };
 
   const handleDrop = (event) => {
@@ -71,37 +92,10 @@ export function DocumentUploader({ definition, document, onUploaded, onRemoved }
     acceptFile(event.dataTransfer.files?.[0]);
   };
 
-  const handleCropped = (croppedFile) => {
-    setFile(croppedFile);
-    setPreviewUrl(URL.createObjectURL(croppedFile));
-    setWasCropped(true);
-    setCropOpen(false);
-  };
-
-  const handleUpload = async () => {
-    setIsUploading(true);
-    setError(null);
-    setProgress(0);
-
-    try {
-      const data = await accountApi.uploadDocument({
-        type: definition.type,
-        file,
-        isCropped: wasCropped,
-        onProgress: setProgress,
-      });
-      clearSelection();
-      onUploaded(data.document);
-    } catch (caught) {
-      setError(caught.message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const handleRemove = async () => {
     setIsRemoving(true);
     setError(null);
+
     try {
       await accountApi.deleteDocument(document.id);
       onRemoved(definition.type);
@@ -112,7 +106,48 @@ export function DocumentUploader({ definition, document, onUploaded, onRemoved }
     }
   };
 
-  // ---------------------------------------------------------------- uploaded
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp,application/pdf"
+      className="sr-only"
+      onChange={(event) => acceptFile(event.target.files?.[0])}
+    />
+  );
+
+  const cropDialog = (
+    <CropDialog
+      open={cropOpen}
+      imageSrc={previewUrl}
+      fileName={pendingFile?.name}
+      onCancel={reset}
+      onSkip={() => upload(pendingFile, false)}
+      onCropped={(croppedFile) => upload(croppedFile, true)}
+    />
+  );
+
+  if (isUploading) {
+    return (
+      <div className="rounded-xl border border-slate-300 bg-white p-4">
+        <div className="flex items-center gap-3">
+          <Spinner size="sm" className="text-brand-700" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-900">
+              Uploading {definition.label.toLowerCase()}…
+            </p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full bg-brand-600 transition-[width]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+          <span className="tabular text-xs text-slate-500">{progress}%</span>
+        </div>
+      </div>
+    );
+  }
 
   if (document) {
     return (
@@ -154,80 +189,11 @@ export function DocumentUploader({ definition, document, onUploaded, onRemoved }
         </div>
 
         {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          className="sr-only"
-          onChange={(event) => acceptFile(event.target.files?.[0])}
-        />
-
-        {/* Replacing re-enters the selection flow below. */}
-        {file && (
-          <div className="mt-4 border-t border-emerald-200 pt-4">
-            <SelectionPreview
-              definition={definition}
-              file={file}
-              previewUrl={previewUrl}
-              wasCropped={wasCropped}
-              isPdf={isPdf}
-              canCrop={canCrop}
-              isUploading={isUploading}
-              progress={progress}
-              onCrop={() => setCropOpen(true)}
-              onCancel={clearSelection}
-              onUpload={handleUpload}
-              replacing
-            />
-          </div>
-        )}
-
-        <CropDialog
-          open={cropOpen}
-          imageSrc={previewUrl}
-          fileName={file?.name}
-          onCancel={() => setCropOpen(false)}
-          onCropped={handleCropped}
-        />
+        {fileInput}
+        {cropDialog}
       </div>
     );
   }
-
-  // ------------------------------------------------------------ pending file
-
-  if (file) {
-    return (
-      <>
-        <div className="rounded-xl border border-slate-300 bg-white p-4">
-          <SelectionPreview
-            definition={definition}
-            file={file}
-            previewUrl={previewUrl}
-            wasCropped={wasCropped}
-            isPdf={isPdf}
-            canCrop={canCrop}
-            isUploading={isUploading}
-            progress={progress}
-            onCrop={() => setCropOpen(true)}
-            onCancel={clearSelection}
-            onUpload={handleUpload}
-          />
-          {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-        </div>
-
-        <CropDialog
-          open={cropOpen}
-          imageSrc={previewUrl}
-          fileName={file.name}
-          onCancel={() => setCropOpen(false)}
-          onCropped={handleCropped}
-        />
-      </>
-    );
-  }
-
-  // ---------------------------------------------------------------- empty
 
   return (
     <div>
@@ -269,84 +235,8 @@ export function DocumentUploader({ definition, document, onUploaded, onRemoved }
       </button>
 
       {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,application/pdf"
-        className="sr-only"
-        onChange={(event) => acceptFile(event.target.files?.[0])}
-      />
+      {fileInput}
+      {cropDialog}
     </div>
-  );
-}
-
-function SelectionPreview({
-  definition,
-  file,
-  previewUrl,
-  wasCropped,
-  isPdf,
-  canCrop,
-  isUploading,
-  progress,
-  onCrop,
-  onCancel,
-  onUpload,
-  replacing = false,
-}) {
-  return (
-    <>
-      <div className="flex items-start gap-4">
-        <div className="h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200">
-          {isPdf ? (
-            <div className="flex h-full items-center justify-center text-xs font-semibold text-slate-500">
-              PDF
-            </div>
-          ) : (
-            <img src={previewUrl} alt="Selected file preview" className="h-full w-full object-cover" />
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-sm font-semibold text-slate-900">
-              {replacing ? `New ${definition.label.toLowerCase()}` : definition.label}
-            </p>
-            {wasCropped && <Badge tone="brand">Cropped</Badge>}
-          </div>
-          <p className="mt-0.5 truncate text-xs text-slate-500">
-            {file.name} · {formatFileSize(file.size)}
-          </p>
-
-          {isUploading ? (
-            <div className="mt-3 flex items-center gap-2.5">
-              <Spinner size="sm" className="text-brand-700" />
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full bg-brand-600 transition-[width]"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <span className="tabular text-xs text-slate-500">{progress}%</span>
-            </div>
-          ) : (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" onClick={onUpload}>
-                Upload
-              </Button>
-              {canCrop && (
-                <Button size="sm" variant="secondary" onClick={onCrop}>
-                  {wasCropped ? 'Crop again' : 'Crop'}
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" onClick={onCancel}>
-                Cancel
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
   );
 }

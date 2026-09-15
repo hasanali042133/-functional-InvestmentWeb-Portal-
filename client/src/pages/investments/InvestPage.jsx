@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as productsApi from '@/api/products.api.js';
 import * as investmentsApi from '@/api/investments.api.js';
 import { useApi } from '@/hooks/useApi.js';
+import { LIVE_POLL_MS } from '@/lib/live.js';
 import { investmentAmountSchema } from '@/lib/accountValidators.js';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
 import { CurrencyInput } from '@/components/ui/Field.jsx';
@@ -22,8 +23,12 @@ export default function InvestPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const product = useApi(() => productsApi.getProduct(id), [id]);
-  const portfolio = useApi(() => investmentsApi.getPortfolioSummary(), []);
+  // The price is live, so the quote on screen keeps up with it rather than
+  // going stale while the customer is deciding how much to invest.
+  const product = useApi(() => productsApi.getProduct(id), [id], { pollMs: LIVE_POLL_MS });
+  const portfolio = useApi(() => investmentsApi.getPortfolioSummary(), [], {
+    pollMs: LIVE_POLL_MS,
+  });
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingAmount, setPendingAmount] = useState(null);
@@ -152,7 +157,7 @@ export default function InvestPage() {
                 required
                 min={fund.minInvestment}
                 step={1000}
-                placeholder={String(fund.minInvestment)}
+                placeholder="Enter amount"
                 hint={`Minimum ${formatCurrency(fund.minInvestment)}`}
                 error={errors.amount?.message}
                 {...register('amount')}

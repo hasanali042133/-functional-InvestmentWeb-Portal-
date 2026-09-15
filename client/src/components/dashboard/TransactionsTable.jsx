@@ -23,39 +23,45 @@ export function TransactionsTable({ transactions = [], showReference = true, emp
 
   return (
     <>
-      <div className="hidden sm:block">
-        <table className="w-full text-left text-sm">
+      {/* Scrolls inside its own card rather than widening the page. */}
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[40rem] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-xs text-slate-500">
-              {showReference && <th className="px-5 py-3 font-medium">Transaction ID</th>}
-              <th className="px-5 py-3 font-medium">Date</th>
-              <th className="px-5 py-3 font-medium">Product</th>
-              <th className="px-5 py-3 font-medium">Type</th>
-              <th className="px-5 py-3 text-right font-medium">Amount</th>
-              <th className="px-5 py-3 text-right font-medium">Status</th>
+            <tr className="border-b border-slate-200 bg-slate-50/60 text-xs tracking-wide text-slate-500 uppercase">
+              {showReference && (
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Transaction ID</th>
+              )}
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Date</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Product</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Type</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Amount</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {transactions.map((transaction) => (
-              <tr key={transaction.id} className="hover:bg-slate-50/70">
+              <tr
+                key={transaction.id}
+                className="transition-colors duration-150 hover:bg-brand-50/40"
+              >
                 {showReference && (
-                  <td className="px-5 py-3.5 font-mono text-xs font-semibold text-slate-700">
+                  <td className="px-4 py-3.5 font-mono text-xs font-semibold whitespace-nowrap text-slate-700">
                     {transaction.txnRef}
                   </td>
                 )}
-                <td className="px-5 py-3.5 whitespace-nowrap text-slate-600">
+                <td className="px-4 py-3.5 whitespace-nowrap text-slate-600">
                   {formatDate(transaction.createdAt)}
                 </td>
-                <td className="px-5 py-3.5 font-medium text-slate-900">
+                <td className="px-4 py-3.5 font-medium whitespace-nowrap text-slate-900">
                   {transaction.productName}
                 </td>
-                <td className="px-5 py-3.5 text-slate-600">
+                <td className="px-4 py-3.5 whitespace-nowrap text-slate-600">
                   {transaction.type === 'INVESTMENT' ? 'Investment' : 'Redemption'}
                 </td>
-                <td className="tabular px-5 py-3.5 text-right font-semibold text-slate-900">
+                <td className="tabular px-4 py-3.5 text-right font-semibold whitespace-nowrap text-slate-900">
                   {formatCurrency(transaction.amount)}
                 </td>
-                <td className="px-5 py-3.5 text-right">
+                <td className="px-4 py-3.5 text-right">
                   <StatusBadge status={transaction.status} />
                 </td>
               </tr>

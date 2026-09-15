@@ -9,7 +9,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatAxisDate, formatCurrency, formatDate } from '@/lib/format.js';
+import {
+  formatAxisDate,
+  formatAxisTime,
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+} from '@/lib/format.js';
 
 const compact = new Intl.NumberFormat('en-PK', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -20,8 +26,16 @@ const compact = new Intl.NumberFormat('en-PK', { notation: 'compact', maximumFra
  * because they put more money in. Plotting cost against it makes the gap
  * between the two lines the actual return.
  */
-export function PortfolioValueChart({ data = [], height = 300 }) {
+export function PortfolioValueChart({ data = [], height = 300, granularity = 'daily' }) {
   if (data.length === 0) return null;
+
+  // Someone who invested this morning has one day to plot, so the API switches
+  // to intraday points and the axis follows it: a numeric time scale, where a
+  // gap in the feed stays a gap rather than being closed up.
+  const isIntraday = granularity === 'intraday';
+  const points = isIntraday
+    ? data.map((point) => ({ ...point, at: new Date(point.at).getTime() }))
+    : data;
 
   const values = data.flatMap((point) => [point.value, point.invested]);
   const min = Math.min(...values);
@@ -30,7 +44,7 @@ export function PortfolioValueChart({ data = [], height = 300 }) {
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
+      <ComposedChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
         <defs>
           <linearGradient id="portfolioFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#0d9488" stopOpacity={0.26} />
@@ -41,12 +55,15 @@ export function PortfolioValueChart({ data = [], height = 300 }) {
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
 
         <XAxis
-          dataKey="date"
+          dataKey={isIntraday ? 'at' : 'date'}
+          type={isIntraday ? 'number' : 'category'}
+          scale={isIntraday ? 'time' : 'auto'}
+          domain={isIntraday ? ['dataMin', 'dataMax'] : undefined}
           tickLine={false}
           axisLine={false}
           minTickGap={48}
           tick={{ fill: '#64748b', fontSize: 12 }}
-          tickFormatter={formatAxisDate}
+          tickFormatter={isIntraday ? formatAxisTime : formatAxisDate}
         />
 
         <YAxis
@@ -66,7 +83,7 @@ export function PortfolioValueChart({ data = [], height = 300 }) {
             boxShadow: '0 8px 24px rgb(15 23 42 / 0.08)',
             fontSize: 13,
           }}
-          labelFormatter={(value) => formatDate(value)}
+          labelFormatter={(value) => (isIntraday ? formatDateTime(value) : formatDate(value))}
           formatter={(value, name) => [formatCurrency(value), name]}
         />
 

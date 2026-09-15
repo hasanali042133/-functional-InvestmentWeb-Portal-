@@ -70,7 +70,7 @@ export default function LoginPage() {
           type="email"
           required
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder="Enter your email address"
           error={errors.email?.message}
           {...register('email')}
         />

@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import * as investmentsApi from '@/api/investments.api.js';
 import { useApi } from '@/hooks/useApi.js';
+import { LIVE_POLL_MS } from '@/lib/live.js';
 import { PageHeader } from '@/components/layout/PageHeader.jsx';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { RiskBadge } from '@/components/ui/Badge.jsx';
 import { StatCard } from '@/components/dashboard/StatCard.jsx';
 import { DistributionChart } from '@/components/charts/DistributionChart.jsx';
+import { RiskAnalysisCard } from '@/components/dashboard/RiskAnalysisCard.jsx';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States.jsx';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format.js';
 import { cn } from '@/lib/cn.js';
@@ -14,44 +16,53 @@ import { cn } from '@/lib/cn.js';
 function HoldingsTable({ holdings }) {
   return (
     <>
-      <div className="hidden sm:block">
-        <table className="w-full text-left text-sm">
+      {/*
+        The table scrolls inside its own card rather than being squeezed to fit.
+        Money that wraps mid-figure is worse than money you scroll to: a column
+        narrow enough to break "-PKR 548" across two lines is not readable at
+        any width.
+      */}
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[42rem] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-xs text-slate-500">
-              <th className="px-5 py-3 font-medium">Product</th>
-              <th className="px-5 py-3 text-right font-medium">Units</th>
-              <th className="px-5 py-3 text-right font-medium">Invested</th>
-              <th className="px-5 py-3 text-right font-medium">Current value</th>
-              <th className="px-5 py-3 text-right font-medium">Gain / loss</th>
-              <th className="px-5 py-3 text-right font-medium">Share</th>
+            <tr className="border-b border-slate-200 bg-slate-50/60 text-xs tracking-wide text-slate-500 uppercase">
+              <th className="px-4 py-3 font-medium">Product</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Units</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Invested</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Current value</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Gain / loss</th>
+              <th className="px-4 py-3 text-right font-medium whitespace-nowrap">Share</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {holdings.map((holding) => (
-              <tr key={holding.productId} className="hover:bg-slate-50/70">
-                <td className="px-5 py-3.5">
-                  <Link
-                    to={`/products/${holding.productId}`}
-                    className="font-medium text-slate-900 hover:text-brand-700"
-                  >
-                    {holding.productName}
-                  </Link>
-                  <div className="mt-1">
+              <tr
+                key={holding.productId}
+                className="hover:bg-brand-50/40 transition-colors duration-150"
+              >
+                <td className="px-4 py-3.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/products/${holding.productId}`}
+                      className="hover:text-brand-700 font-medium whitespace-nowrap text-slate-900"
+                    >
+                      {holding.productName}
+                    </Link>
                     <RiskBadge level={holding.riskLevel} />
                   </div>
                 </td>
-                <td className="tabular px-5 py-3.5 text-right text-slate-600">
+                <td className="tabular px-4 py-3.5 text-right whitespace-nowrap text-slate-600">
                   {formatNumber(holding.units, 4)}
                 </td>
-                <td className="tabular px-5 py-3.5 text-right text-slate-600">
+                <td className="tabular px-4 py-3.5 text-right whitespace-nowrap text-slate-600">
                   {formatCurrency(holding.invested)}
                 </td>
-                <td className="tabular px-5 py-3.5 text-right font-semibold text-slate-900">
+                <td className="tabular px-4 py-3.5 text-right font-semibold whitespace-nowrap text-slate-900">
                   {formatCurrency(holding.currentValue)}
                 </td>
                 <td
                   className={cn(
-                    'tabular px-5 py-3.5 text-right font-semibold',
+                    'tabular px-4 py-3.5 text-right font-semibold whitespace-nowrap',
                     holding.gain >= 0 ? 'text-gain' : 'text-loss',
                   )}
                 >
@@ -60,7 +71,7 @@ function HoldingsTable({ holdings }) {
                     {formatPercent(holding.gainPct)}
                   </span>
                 </td>
-                <td className="tabular px-5 py-3.5 text-right text-slate-600">
+                <td className="tabular px-4 py-3.5 text-right whitespace-nowrap text-slate-600">
                   {formatPercent(holding.sharePct, { signed: false, decimals: 1 })}
                 </td>
               </tr>
@@ -110,7 +121,10 @@ export default function PortfolioPage() {
   const { data, error, isLoading, refetch } = useApi(
     () => investmentsApi.getPortfolioSummary(),
     [],
+    { pollMs: LIVE_POLL_MS },
   );
+
+  const risk = useApi(() => investmentsApi.getPortfolioRisk(), [], { pollMs: LIVE_POLL_MS });
 
   const holdings = data?.holdings ?? [];
 
@@ -169,6 +183,7 @@ export default function PortfolioPage() {
             <StatCard
               label="Total gain"
               value={formatCurrency(data.totalGain)}
+              valueTone={data.totalGain >= 0 ? 'gain' : 'loss'}
               hint="Since your first investment"
             />
             <StatCard
@@ -179,20 +194,26 @@ export default function PortfolioPage() {
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-5">
-            <Card className="lg:col-span-3">
+            <Card className="min-w-0 lg:col-span-3">
               <CardHeader title="Your holdings" />
               <HoldingsTable holdings={holdings} />
             </Card>
 
-            <Card className="lg:col-span-2">
-              <CardHeader
-                title="Distribution"
-                description="Share of your portfolio by fund"
+            <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+              <Card className="min-w-0">
+                <CardHeader title="Distribution" description="Share of your portfolio by fund" />
+                <CardBody>
+                  <DistributionChart holdings={holdings} />
+                </CardBody>
+              </Card>
+
+              <RiskAnalysisCard
+                risk={risk.data}
+                isLoading={risk.isLoading}
+                error={risk.error}
+                onRetry={risk.refetch}
               />
-              <CardBody>
-                <DistributionChart holdings={holdings} />
-              </CardBody>
-            </Card>
+            </div>
           </div>
         </>
       )}

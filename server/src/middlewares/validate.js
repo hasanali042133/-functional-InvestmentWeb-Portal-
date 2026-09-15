@@ -1,13 +1,9 @@
 import { sendError } from '../utils/apiResponse.js';
 
 /**
- * Validates a request section against a Zod schema and replaces it with the
- * parsed result, so controllers always receive coerced, trimmed, known-shape
- * data. Unknown keys are stripped by Zod objects, which stops clients from
- * smuggling extra fields into a create/update.
- *
- * @param {import('zod').ZodTypeAny} schema
- * @param {'body'|'query'|'params'} source
+ * Validates a request section and replaces it with the parsed result, so
+ * controllers receive coerced, known-shape data. Zod strips unknown keys, which
+ * stops clients smuggling extra fields into a create or update.
  */
 export const validate =
   (schema, source = 'body') =>

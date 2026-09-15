@@ -12,7 +12,7 @@ import { getCroppedImage } from '@/lib/cropImage.js';
  */
 const CARD_ASPECT = 1.585;
 
-export function CropDialog({ open, imageSrc, fileName, onCancel, onCropped }) {
+export function CropDialog({ open, imageSrc, fileName, onCancel, onSkip, onCropped }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [areaPixels, setAreaPixels] = useState(null);
@@ -50,8 +50,7 @@ export function CropDialog({ open, imageSrc, fileName, onCancel, onCropped }) {
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-900">Crop your document</h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            Drag to reposition and pinch or use the slider to zoom. Trim away anything around the
-            card.
+            Drag to reposition and use the slider to zoom, so only the card is in frame.
           </p>
         </div>
 
@@ -86,13 +85,19 @@ export function CropDialog({ open, imageSrc, fileName, onCancel, onCropped }) {
 
           {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
-          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
-              Cancel
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
+              Choose a different file
             </Button>
-            <Button onClick={handleSave} loading={isSaving} disabled={!areaPixels}>
-              {isSaving ? 'Applying' : 'Apply crop'}
-            </Button>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button variant="secondary" onClick={onSkip} disabled={isSaving}>
+                Upload without cropping
+              </Button>
+              <Button onClick={handleSave} loading={isSaving} disabled={!areaPixels}>
+                {isSaving ? 'Uploading' : 'Crop and upload'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

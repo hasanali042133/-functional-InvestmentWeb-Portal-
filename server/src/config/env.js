@@ -58,8 +58,13 @@ const envSchema = z.object({
     .default('true')
     .transform((value) => value === 'true'),
 
-  // How often a new simulated price is published.
+  // How often the in-process timer publishes a new simulated price.
   NAV_SIMULATION_INTERVAL_MINUTES: z.coerce.number().positive().default(5),
+
+  // Shared secret for the endpoint an external scheduler calls. Left unset, that
+  // endpoint does not exist at all — an unguarded way to move prices is not
+  // something to leave lying around because somebody forgot to configure it.
+  CRON_SECRET: z.string().min(16).optional(),
 
   EXPOSE_DEV_OTP: z
     .enum(['true', 'false'])

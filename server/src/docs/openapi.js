@@ -307,6 +307,10 @@ export const openApiSpec = {
     { name: 'Account', description: 'Account opening application and identity documents' },
     { name: 'Products', description: 'The investment products a customer can buy' },
     { name: 'Investing', description: 'Investments, transactions and portfolio' },
+    {
+      name: 'Scheduling',
+      description: 'Operational endpoints, called by a scheduler rather than by a customer',
+    },
   ],
   components: {
     securitySchemes: {
@@ -315,6 +319,12 @@ export const openApiSpec = {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         description: 'Paste the `token` returned by login or verify-otp.',
+      },
+      cronSecret: {
+        type: 'http',
+        scheme: 'bearer',
+        description:
+          'The value of `CRON_SECRET`. A shared secret held by the scheduler, not a session token — there is no customer behind a scheduled call.',
       },
     },
     schemas: {
@@ -876,6 +886,54 @@ export const openApiSpec = {
             message: 'Please correct the highlighted fields.',
             code: 'VALIDATION_ERROR',
             errors: [{ field: 'id', message: 'That is not a valid product id.' }],
+          }),
+        },
+      },
+    },
+
+    '/api/nav/tick': {
+      post: {
+        tags: ['Scheduling'],
+        summary: 'Publish the next price for every fund',
+        description:
+          'For an external scheduler. The API advances prices on its own timer while it is running, which is no help on a host that runs it as functions or puts it to sleep when idle; a five-minute call here keeps the feed moving instead, and on a sleeping instance doubles as what wakes it. Unset `CRON_SECRET` and this endpoint answers 404: an unguarded way to move prices should not exist because a variable was forgotten.',
+        security: [{ cronSecret: [] }],
+        responses: {
+          200: {
+            description: 'Prices advanced',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: {
+                      moves: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            code: { type: 'string', example: 'GROWTH' },
+                            nav: { type: 'number', format: 'double', example: 118.8204 },
+                            changePct: { type: 'number', format: 'double', example: -1.42 },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  { message: 'Prices advanced.' },
+                ),
+              },
+            },
+          },
+          401: jsonError('Missing or wrong secret', {
+            success: false,
+            message: 'Invalid scheduler credentials.',
+            code: 'INVALID_CRON_SECRET',
+          }),
+          404: jsonError('No CRON_SECRET is configured, so the endpoint does not exist', {
+            success: false,
+            message: 'Not found.',
+            code: 'NOT_FOUND',
           }),
         },
       },

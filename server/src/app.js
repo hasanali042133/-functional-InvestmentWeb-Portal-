@@ -108,6 +108,9 @@ app.get('/', (req, res) =>
         list: 'GET /api/products',
         detail: 'GET /api/products/:id',
       },
+      scheduled: {
+        advancePrices: 'POST /api/nav/tick (requires CRON_SECRET)',
+      },
       investing: {
         invest: 'POST /api/investments',
         investments: 'GET /api/investments',

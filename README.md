@@ -390,6 +390,24 @@ bearer token.
 | `GET` | `/api/portfolio/performance` | Value against cost over time |
 | `GET` | `/api/portfolio/risk` | Risk score against the declared profile |
 
+### Scheduled work
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/nav/tick` | Publish the next price for every fund |
+
+This one is not for the browser and takes no session. It authenticates with a
+shared secret instead:
+
+```bash
+curl -X POST https://your-api/api/nav/tick \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+With `CRON_SECRET` unset the route answers 404. An unguarded way to move prices
+should not come into existence because somebody forgot to set a variable, and a
+403 would confirm the endpoint is there to anyone probing for it.
+
 ## Running Locally
 
 ### Prerequisites
@@ -461,6 +479,7 @@ The app starts on `http://localhost:5174`.
 | `INVESTABLE_CREDIT` | Notional balance credited on approval (default `1000000`). Real funding is out of scope |
 | `NAV_SIMULATION` | Publish simulated fund prices (default `true`) |
 | `NAV_SIMULATION_INTERVAL_MINUTES` | How often a new price is published (default `5`) |
+| `CRON_SECRET` | Optional, at least 16 characters. Enables `POST /api/nav/tick` so an external scheduler can publish prices. Unset, that route does not exist |
 
 **Frontend** (`client/.env`)
 
@@ -520,9 +539,31 @@ cd server
 npm run nav:advance -- --force
 ```
 
+### Publishing prices from outside the server
+
+The built-in timer covers a server that stays up. It does not survive a host
+that runs the API as serverless functions, and it stops on a free instance that
+sleeps when idle — which is most of the free tier. So prices can also be moved
+from outside, by any scheduler that can send one HTTP request:
+
+1. Generate a secret and set it as `CRON_SECRET` on the API.
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+   ```
+
+2. Point a scheduler at `POST /api/nav/tick` every five minutes, with the header
+   `Authorization: Bearer <CRON_SECRET>`. [cron-job.org](https://cron-job.org),
+   [UptimeRobot](https://uptimerobot.com) and a GitHub Actions `schedule:`
+   workflow all do this on a free plan.
+
+On a host that sleeps, the same request doubles as the thing that wakes it. The
+secret is compared in constant time, so a caller cannot learn it a character at
+a time by measuring how long the rejection takes.
+
 ## Tests
 
-106 end-to-end checks run against a running server. Seed the database first, so
+114 end-to-end checks run against a running server. Seed the database first, so
 the suite has the demo account and price history it expects.
 
 ```bash
@@ -538,9 +579,9 @@ products and account suites are unaffected.
 
 | Command | Covers |
 | --- | --- |
-| `npm run test:auth` | 33 checks — the signup flow, code expiry and delivery reporting, two-factor sign-in, password reset including its refusal to reveal who has an account, validation and credential errors, token handling, the resend cooldown and the attempt lockout |
-| `npm run test:products` | 27 checks — listing and ordering, the daily price series, performance figures, and the intraday feed |
-| `npm run test:account` | 43 checks — draft saving and validation, submission guards, document upload rejections, portfolio valuation, risk analysis, investing limits, and cross-customer isolation |
+| `npm run test:auth` | 39 checks — the signup flow, code expiry and delivery reporting, two-factor sign-in, password reset including its refusal to reveal who has an account, validation and credential errors, token handling, the resend cooldown and the attempt lockout |
+| `npm run test:products` | 29 checks — listing and ordering, the daily price series, performance figures, the intraday feed, and the scheduler endpoint's refusal of an unauthenticated caller |
+| `npm run test:account` | 46 checks — draft saving and validation, submission guards, document upload rejections, portfolio valuation, risk analysis, investing limits, and cross-customer isolation |
 
 The suite invests on the demo account as it runs, so re-run `npm run db:seed` to
 reset it.
@@ -570,24 +611,78 @@ reset it.
 
 ## Deployment
 
-The application is deployable as two services against a hosted PostgreSQL
-database such as Neon.
+Two Vercel projects out of one repository — the API and the frontend — against a
+hosted PostgreSQL database such as Neon.
 
-**Backend.** Set every variable in the table above, then run
-`npm run db:deploy` to apply migrations and `npm start` to serve. Two of these
-matter more than the rest in production:
+### Backend
 
-- **Cloudinary must be configured.** A platform instance has an ephemeral disk,
-  so locally stored uploads would be lost on the next deploy.
-- **`DIRECT_URL` should be the non-pooled connection.** Schema changes need a
-  real session, which a transaction pooler cannot guarantee.
+| Setting | Value |
+| --- | --- |
+| Root Directory | `server` |
+| Framework Preset | Other |
+| Build Command | leave empty (`vercel-build` runs `prisma generate`) |
+
+`server/api/index.js` is the function Vercel runs, and `server/vercel.json`
+rewrites every path to it, so the Express app answers exactly as it does
+locally. `src/server.js` is untouched and still starts a real listening server
+for local development and for hosts that run a process.
+
+Set every variable from the table above in the project's environment, with
+`NODE_ENV=production`. Four of them decide whether the deploy works:
+
+- **`DATABASE_URL` must be the pooled connection.** Each function instance opens
+  its own connections, and a serverless Postgres pooler is what keeps that from
+  exhausting the database. Append `?pgbouncer=true&connection_limit=1`.
+- **`DIRECT_URL` must be the non-pooled one.** Migrations need a real session,
+  which a transaction pooler cannot guarantee.
+- **Cloudinary must be configured.** A function has no writable disk, so
+  document uploads have nowhere to land. Without it the upload endpoint refuses
+  in production rather than pretending to have saved anything.
+- **`CLIENT_URL` must be the frontend's own URL**, or CORS will refuse it.
+
+Migrations do not run inside a function. Apply them from a machine that can
+reach the database:
+
+```bash
+cd server
+DATABASE_URL="<direct connection>" npx prisma migrate deploy
+npm run db:seed          # the three funds and their price history
+```
 
 `EXPOSE_DEV_OTP` is force-disabled when `NODE_ENV=production` regardless of what
-it is set to.
+it is set to, so codes are only ever delivered by email. Configure SMTP or
+nobody can sign up.
 
-**Frontend.** `npm run build` produces a static bundle in `client/dist`. Set
-`VITE_API_URL` to the deployed API URL at build time, and set the API's
-`CLIENT_URL` to the frontend origin so CORS allows it.
+**Prices.** The in-process timer never starts in a function — there is no
+process to hold it. Set `CRON_SECRET` and drive `POST /api/nav/tick` from an
+external scheduler every five minutes; see **Publishing prices from outside the
+server** above. Vercel's own cron runs once a day on the free plan, which is too
+coarse for a feed that is meant to visibly move.
+
+**Rate limiting** counts in the memory of one instance, so limits are per
+instance rather than global. That still blunts one caller hammering one
+endpoint; a shared store would be the answer if it were holding back a real
+attack.
+
+### Frontend
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `client` |
+| Framework Preset | Vite |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+
+Set `VITE_API_URL` to the deployed API's URL, with no trailing slash. It is read
+at build time, not at run time, so changing it needs a redeploy.
+
+`client/vercel.json` rewrites every path to `index.html`. Without it the app
+404s on any URL the customer did not arrive at by clicking — a refresh on
+`/portfolio`, or a bookmark.
+
+Deploy the API first: the frontend build needs its URL, and the API needs the
+frontend's. Vercel gives each project a stable `*.vercel.app` name before either
+is built, so both values are known up front.
 
 ## Limitations
 

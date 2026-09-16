@@ -168,6 +168,33 @@ check(
   `${((new Date(intraday.to) - new Date(intraday.from)) / 3600000).toFixed(1)}h`,
 );
 
+console.log('\n=== SCHEDULED PRICE TICK ===');
+
+// The endpoint an external scheduler calls where an in-process timer cannot
+// survive. Whether it exists at all depends on CRON_SECRET, so both shapes are
+// legitimate — what must never happen is an unauthenticated caller moving
+// prices.
+const tick = (token) =>
+  call('/api/nav/tick', { method: 'POST', ...(token ? { token } : {}) });
+
+const noAuth = await tick();
+const guarded = noAuth.status === 404;
+
+check(
+  guarded
+    ? 'the tick endpoint does not exist without a secret'
+    : 'the tick endpoint refuses an unauthenticated caller',
+  guarded ? noAuth.body.code === 'NOT_FOUND' : noAuth.status === 401,
+  `${noAuth.status} ${noAuth.body.code}`,
+);
+
+const wrongSecret = await tick('clearly-not-the-right-secret');
+check(
+  'a wrong secret never moves prices',
+  wrongSecret.status === 404 || wrongSecret.status === 401,
+  `${wrongSecret.status} ${wrongSecret.body.code}`,
+);
+
 console.log('\n=== ERRORS ===');
 const notFound = await call('/api/products/11111111-1111-1111-1111-111111111111', { token });
 check('unknown id -> 404', notFound.status === 404 && notFound.body.code === 'PRODUCT_NOT_FOUND', `${notFound.status}`);

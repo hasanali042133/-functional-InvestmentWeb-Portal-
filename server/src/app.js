@@ -26,7 +26,7 @@ app.use(
   helmet({ contentSecurityPolicy: false }),
   swaggerUi.serve,
   swaggerUi.setup(openApiSpec, {
-    customSiteTitle: 'Investment Portal API',
+    customSiteTitle: 'Nivesta API',
     swaggerOptions: {
       persistAuthorization: true,
       displayRequestDuration: true,
@@ -92,7 +92,10 @@ app.get('/', (req, res) =>
         register: 'POST /api/auth/register',
         verifyOtp: 'POST /api/auth/verify-otp',
         resendOtp: 'POST /api/auth/resend-otp',
+        requestLoginCode: 'POST /api/auth/login/request-code',
         login: 'POST /api/auth/login',
+        forgotPassword: 'POST /api/auth/forgot-password',
+        resetPassword: 'POST /api/auth/reset-password',
         currentUser: 'GET /api/auth/me',
       },
       account: {

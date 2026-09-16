@@ -40,6 +40,26 @@ const signUpFreshUser = async () => {
   });
 
   const code = registered.body.data?.verification?.devOtp;
+
+  // This suite has to create and verify its own customers, which needs the
+  // code. The API only returns it when EXPOSE_DEV_OTP is on, so say that
+  // plainly instead of crashing further down on a missing token.
+  if (!code) {
+    console.log(
+      '\n  Cannot continue: this suite creates its own test customers, which' +
+        '\n  needs the verification code. The API only returns it when' +
+        '\n  EXPOSE_DEV_OTP=true.' +
+        '\n' +
+        '\n  Set EXPOSE_DEV_OTP=true in server/.env, restart the server, and run' +
+        '\n  this again. Turn it back off afterwards if codes should only ever' +
+        '\n  reach customers by email.\n',
+    );
+    // Let fetch's pooled sockets go idle before leaving, or libuv prints an
+    // assertion on Windows that would bury the message above.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    process.exit(1);
+  }
+
   const verified = await call('/api/auth/verify-otp', { method: 'POST', body: { email, code } });
 
   return { email, token: verified.body.data?.token };
@@ -209,7 +229,13 @@ check(
 );
 
 console.log('\n=== APPROVED ACCOUNT (seeded demo) ===');
-const demoLogin = await call('/api/auth/login', { method: 'POST', body: DEMO });
+// Signing in is two steps now: credentials earn an emailed code, then the code
+// and the credentials together earn the token.
+const demoCodeRequest = await call('/api/auth/login/request-code', { method: 'POST', body: DEMO });
+const demoCode = demoCodeRequest.body.data?.devOtp;
+const demoLogin = demoCode
+  ? await call('/api/auth/login', { method: 'POST', body: { ...DEMO, code: demoCode } })
+  : demoCodeRequest;
 const demoToken = demoLogin.body.data?.token;
 check('demo account signed in', Boolean(demoToken));
 
@@ -269,6 +295,26 @@ check(
   'transactions paginate',
   transactions.body.data?.transactions?.length === 2 && transactions.body.data.pagination.total >= 3,
   `page 1 of ${transactions.body.data?.pagination?.totalPages}`,
+);
+
+// The detail panel answers "what did this money buy?", which needs the units
+// and the price they were bought at, not just the amount and the date.
+const txn = transactions.body.data.transactions[0];
+check(
+  'a transaction carries what it bought',
+  typeof txn.units === 'number' && typeof txn.navAtPurchase === 'number',
+  `${txn.units} units @ ${txn.navAtPurchase}`,
+);
+
+check(
+  'units reconcile with the amount and the price paid',
+  Math.abs(txn.units * txn.navAtPurchase - txn.amount) < 0.01,
+  `${(txn.units * txn.navAtPurchase).toFixed(2)} vs ${txn.amount}`,
+);
+
+check(
+  'every transaction identifies the fund it belongs to',
+  transactions.body.data.transactions.every((t) => t.productId && t.productName && t.txnRef),
 );
 
 console.log('\n=== RISK ANALYSIS ===');

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import * as investmentsApi from '@/api/investments.api.js';
 import { useApi } from '@/hooks/useApi.js';
 import { LIVE_POLL_MS } from '@/lib/live.js';
@@ -13,7 +13,16 @@ import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States.jsx';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/format.js';
 import { cn } from '@/lib/cn.js';
 
+/**
+ * A customer's holdings, each row a way into the fund behind it.
+ *
+ * The row is the target for a pointer and the fund name stays a real link for
+ * the keyboard; the link stops its click propagating so pressing it does not
+ * also fire the row underneath.
+ */
 function HoldingsTable({ holdings }) {
+  const navigate = useNavigate();
+
   return (
     <>
       {/*
@@ -38,12 +47,14 @@ function HoldingsTable({ holdings }) {
             {holdings.map((holding) => (
               <tr
                 key={holding.productId}
-                className="hover:bg-brand-50/40 transition-colors duration-150"
+                onClick={() => navigate(`/products/${holding.productId}`)}
+                className="hover:bg-brand-50/40 cursor-pointer transition-colors duration-150"
               >
                 <td className="px-4 py-3.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       to={`/products/${holding.productId}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="hover:text-brand-700 font-medium whitespace-nowrap text-slate-900"
                     >
                       {holding.productName}
@@ -82,15 +93,15 @@ function HoldingsTable({ holdings }) {
 
       <ul className="divide-y divide-slate-100 sm:hidden">
         {holdings.map((holding) => (
-          <li key={holding.productId} className="px-5 py-4">
-            <div className="flex items-start justify-between gap-3">
+          <li key={holding.productId}>
+            {/* On a phone the whole card is the target — there is nothing else
+                on it to press. */}
+            <Link
+              to={`/products/${holding.productId}`}
+              className="hover:bg-brand-50/40 flex items-start justify-between gap-3 px-5 py-4 transition-colors"
+            >
               <div className="min-w-0">
-                <Link
-                  to={`/products/${holding.productId}`}
-                  className="font-medium text-slate-900 hover:text-brand-700"
-                >
-                  {holding.productName}
-                </Link>
+                <span className="block font-medium text-slate-900">{holding.productName}</span>
                 <p className="tabular mt-1 text-xs text-slate-500">
                   {formatNumber(holding.units, 4)} units ·{' '}
                   {formatPercent(holding.sharePct, { signed: false, decimals: 1 })} of portfolio
@@ -109,7 +120,7 @@ function HoldingsTable({ holdings }) {
                   {formatCurrency(holding.gain)} ({formatPercent(holding.gainPct)})
                 </p>
               </div>
-            </div>
+            </Link>
           </li>
         ))}
       </ul>

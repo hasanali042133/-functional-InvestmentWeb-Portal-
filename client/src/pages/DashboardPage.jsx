@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth.js';
 import { useApi } from '@/hooks/useApi.js';
+import { cn } from '@/lib/cn.js';
 import { LIVE_POLL_MS } from '@/lib/live.js';
 import { LiveDot } from '@/components/ui/Live.jsx';
 import { useAccountStatus } from '@/hooks/useAccountStatus.js';
@@ -8,14 +10,13 @@ import * as productsApi from '@/api/products.api.js';
 import * as investmentsApi from '@/api/investments.api.js';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
 import { Button } from '@/components/ui/Button.jsx';
-import { StatCard } from '@/components/dashboard/StatCard.jsx';
+import { PortfolioHero } from '@/components/dashboard/PortfolioHero.jsx';
 import { AccountStatusCard } from '@/components/dashboard/AccountStatusCard.jsx';
 import { TransactionsTable } from '@/components/dashboard/TransactionsTable.jsx';
 import { PortfolioValueChart } from '@/components/charts/PortfolioValueChart.jsx';
 import { DistributionChart } from '@/components/charts/DistributionChart.jsx';
 import { ProductCard } from '@/components/products/ProductCard.jsx';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States.jsx';
-import { formatCurrency } from '@/lib/format.js';
 
 /** Signed in, account not yet approved — onboarding plus a look at the funds. */
 function OnboardingDashboard({ status }) {
@@ -74,6 +75,7 @@ function InvestorDashboard({ status }) {
   const holdings = summary?.holdings ?? [];
   const series = performance.data?.series ?? [];
   const granularity = performance.data?.granularity ?? 'daily';
+  const [chartMode, setChartMode] = useState('value');
   const recent = transactions.data?.transactions ?? [];
 
   const hasInvestments = holdings.length > 0;
@@ -82,49 +84,11 @@ function InvestorDashboard({ status }) {
     <div className="space-y-6">
       <AccountStatusCard status={status} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Total invested"
-          value={formatCurrency(summary?.totalInvested)}
-          tone="brand"
-          icon={<path d="M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6" />}
-          isLoading={portfolio.isLoading}
-        />
-        <StatCard
-          label="Current portfolio value"
-          value={formatCurrency(summary?.currentValue)}
-          changePct={hasInvestments ? summary?.gainPct : undefined}
-          tone="gain"
-          icon={<path d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5" />}
-          badge={hasInvestments ? <LiveDot label="Live price" /> : null}
-          isLoading={portfolio.isLoading}
-        />
-        <StatCard
-          label="Investments"
-          value={summary?.investmentCount ?? 0}
-          hint={hasInvestments ? `Across ${holdings.length} fund${holdings.length === 1 ? '' : 's'}` : 'None yet'}
-          tone="accent"
-          icon={
-            <>
-              <path d="M12 3a9 9 0 1 0 9 9h-9z" />
-              <path d="M15 3.5A9 9 0 0 1 20.5 9H15z" />
-            </>
-          }
-          isLoading={portfolio.isLoading}
-        />
-        <StatCard
-          label="Available to invest"
-          value={formatCurrency(summary?.availableBalance)}
-          tone="neutral"
-          icon={
-            <>
-              <rect x="2.5" y="6" width="19" height="13" rx="2" />
-              <path d="M2.5 10.5h19M6 15h3" />
-            </>
-          }
-          isLoading={portfolio.isLoading}
-        />
-      </div>
+      <PortfolioHero
+        summary={summary}
+        holdingCount={holdings.length}
+        isLoading={portfolio.isLoading}
+      />
 
       {portfolio.error && (
         <Card>
@@ -149,11 +113,42 @@ function InvestorDashboard({ status }) {
               <CardHeader
                 title="Portfolio performance"
                 description={
-                  granularity === 'intraday'
-                    ? 'Valued at every price published since you invested.'
-                    : 'Value of your holdings against what you put in.'
+                  chartMode === 'return'
+                    ? 'Gain against what you put in. Paying money in does not move this line.'
+                    : granularity === 'intraday'
+                      ? 'Valued at every price published since you invested.'
+                      : 'Value of your holdings against what you put in.'
                 }
-                action={granularity === 'intraday' ? <LiveDot /> : null}
+                action={
+                  <div className="flex shrink-0 items-center gap-3">
+                    {granularity === 'intraday' && <LiveDot />}
+                    <div
+                      className="flex rounded-lg bg-slate-100 p-0.5"
+                      role="group"
+                      aria-label="Chart reading"
+                    >
+                      {[
+                        { key: 'value', label: 'Value' },
+                        { key: 'return', label: 'Return' },
+                      ].map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          aria-pressed={chartMode === option.key}
+                          onClick={() => setChartMode(option.key)}
+                          className={cn(
+                            'rounded-md px-2.5 py-1 text-xs font-medium transition',
+                            chartMode === option.key
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700',
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                }
               />
               <CardBody className="pl-2">
                 {performance.isLoading && <Skeleton className="h-72 w-full" />}
@@ -161,7 +156,7 @@ function InvestorDashboard({ status }) {
                   <ErrorState error={performance.error} onRetry={performance.refetch} />
                 )}
                 {!performance.isLoading && !performance.error && (
-                  <PortfolioValueChart data={series} granularity={granularity} />
+                  <PortfolioValueChart data={series} granularity={granularity} mode={chartMode} />
                 )}
               </CardBody>
             </Card>

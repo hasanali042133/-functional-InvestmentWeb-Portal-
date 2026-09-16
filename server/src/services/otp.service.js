@@ -12,8 +12,12 @@ const generateCode = () =>
  * is a hash, so a database read cannot be replayed to take over an account.
  */
 export const issueOtp = async ({ userId, purpose = 'EMAIL_VERIFICATION' }) => {
+  // The cooldown exists to stop an inbox being flooded, which only happens when
+  // codes are requested and never used. A code that has been consumed is spent,
+  // so asking for the next one is a new act, not a repeat — otherwise signing
+  // out and back in inside a minute would be impossible.
   const latest = await prisma.otp.findFirst({
-    where: { userId, purpose },
+    where: { userId, purpose, consumedAt: null },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });

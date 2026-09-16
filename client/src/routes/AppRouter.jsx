@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/Spinner.jsx';
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage.jsx'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage.jsx'));
 const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage.jsx'));
+const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage.jsx'));
 
 const DashboardPage = lazy(() => import('@/pages/DashboardPage.jsx'));
 const AccountOpeningPage = lazy(() => import('@/pages/account/AccountOpeningPage.jsx'));
@@ -41,6 +42,7 @@ export function AppRouter() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         </Route>
 
         <Route element={<RequireAuth />}>

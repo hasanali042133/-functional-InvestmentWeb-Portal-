@@ -1,6 +1,7 @@
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { personalSchema } from '@/lib/accountValidators.js';
+import { useGuardedSubmit } from '@/hooks/useGuardedSubmit.js';
 import { GENDERS, MARITAL_STATUSES } from '@/lib/accountOptions.js';
 import { StepShell } from '../StepShell.jsx';
 import { Input, Select, RadioPills } from '@/components/ui/Field.jsx';
@@ -26,6 +27,8 @@ export function PersonalStep({ defaultValues, onSubmit, isSaving, serverError })
     defaultValues,
   });
 
+  const { submit, blockedReasons } = useGuardedSubmit(handleSubmit, onSubmit);
+
   // Nobody old enough to open an account was born after today.
   const today = new Date().toISOString().slice(0, 10);
 
@@ -35,7 +38,8 @@ export function PersonalStep({ defaultValues, onSubmit, isSaving, serverError })
       description="These details must match your CNIC exactly."
       error={serverError}
       isSaving={isSaving}
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={submit}
+      blockedReasons={blockedReasons}
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Input

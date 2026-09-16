@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi.js';
 import { LIVE_POLL_MS } from '@/lib/live.js';
 import { useAccountStatus } from '@/hooks/useAccountStatus.js';
@@ -7,6 +7,7 @@ import * as productsApi from '@/api/products.api.js';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
 import { RiskBadge } from '@/components/ui/Badge.jsx';
 import { Button } from '@/components/ui/Button.jsx';
+import { CurrencyInput } from '@/components/ui/Field.jsx';
 import { Alert } from '@/components/ui/Alert.jsx';
 import { Skeleton, ErrorState } from '@/components/ui/States.jsx';
 import { NavChart } from '@/components/charts/NavChart.jsx';
@@ -94,6 +95,10 @@ export default function ProductDetailPage() {
     pollMs: LIVE_POLL_MS,
   });
   const account = useAccountStatus();
+  const navigate = useNavigate();
+
+  const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState(null);
   // Declared before the early returns below, so the hook order stays constant.
   const [range, setRange] = useState('intraday');
   const product = data?.product;
@@ -112,6 +117,29 @@ export default function ProductDetailPage() {
       </Card>
     );
   }
+
+  /**
+   * Checks the amount here so an obvious mistake is caught on this screen, then
+   * hands it to the invest page. That page validates again against the live
+   * balance, and the server after it — this is a courtesy, not the gate.
+   */
+  const handleInvest = (event) => {
+    event.preventDefault();
+
+    const value = Number(amount);
+
+    if (!amount || Number.isNaN(value) || value <= 0) {
+      setAmountError('Enter an amount.');
+      return;
+    }
+
+    if (value < product.minInvestment) {
+      setAmountError(`The minimum for this fund is ${formatCurrency(product.minInvestment)}.`);
+      return;
+    }
+
+    navigate(`/products/${product.id}/invest`, { state: { amount: value } });
+  };
 
   const performance = product.performance ?? {};
   const isUp = (performance.changePct ?? 0) >= 0;
@@ -264,9 +292,29 @@ export default function ProductDetailPage() {
           <Card>
             <CardBody className="space-y-4">
               {account.isApproved ? (
-                <Button size="lg" fullWidth to={`/products/${product.id}/invest`}>
-                  Invest in this fund
-                </Button>
+                /* The amount is entered here, beside the fund it belongs to,
+                   and carried through to the confirmation screen — so deciding
+                   how much and deciding which fund happen in one place. */
+                <form onSubmit={handleInvest} className="space-y-4" noValidate>
+                  <CurrencyInput
+                    label="Investment amount"
+                    required
+                    min={product.minInvestment}
+                    step={1000}
+                    placeholder="Enter amount"
+                    hint={`Minimum ${formatCurrency(product.minInvestment)}`}
+                    error={amountError}
+                    value={amount}
+                    onChange={(event) => {
+                      setAmount(event.target.value);
+                      setAmountError(null);
+                    }}
+                  />
+
+                  <Button type="submit" size="lg" fullWidth>
+                    Invest in this fund
+                  </Button>
+                </form>
               ) : (
                 <>
                   <Button size="lg" fullWidth disabled>

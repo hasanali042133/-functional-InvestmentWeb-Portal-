@@ -31,12 +31,48 @@ export const resendOtp = asyncHandler(async (req, res) => {
   });
 });
 
+/** POST /api/auth/login/request-code */
+export const requestLoginCode = asyncHandler(async (req, res) => {
+  const verification = await authService.requestLoginCode(req.body);
+
+  return sendSuccess(res, {
+    message: 'A sign-in code has been sent to your email.',
+    data: verification,
+  });
+});
+
 /** POST /api/auth/login */
 export const login = asyncHandler(async (req, res) => {
-  const result = await authService.loginUser(req.body);
+  const result = await authService.loginUser({
+    ...req.body,
+    // Only the request knows which browser this is; the service just labels it.
+    userAgent: req.get('user-agent'),
+  });
 
   return sendSuccess(res, {
     message: 'Signed in successfully.',
+    data: result,
+  });
+});
+
+/** POST /api/auth/forgot-password */
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const result = await authService.requestPasswordReset(req.body);
+
+  // Deliberately identical whether or not the address has an account, so the
+  // response cannot be used to find out who banks here.
+  return sendSuccess(res, {
+    message: 'If that email address has an account, a reset code is on its way.',
+    data: result,
+  });
+});
+
+/** POST /api/auth/reset-password */
+export const resetPassword = asyncHandler(async (req, res) => {
+  const result = await authService.resetPassword(req.body);
+
+  return sendSuccess(res, {
+    message: 'Your password has been changed. You are now signed in.',
     data: result,
   });
 });

@@ -10,6 +10,7 @@ export function StepShell({
   title,
   description,
   error,
+  blockedReasons = [],
   onBack,
   onSubmit,
   isSaving,
@@ -25,6 +26,20 @@ export function StepShell({
       <form onSubmit={onSubmit} noValidate>
         <CardBody className="space-y-6">
           {error && <Alert variant="error">{error}</Alert>}
+
+          {/* Anything stopping the step, listed where it cannot be missed. A
+              message beside its field is better — but only when that field is
+              actually on screen. */}
+          {blockedReasons.length > 0 && (
+            <Alert variant="error" title="This step is not complete yet">
+              <ul className="list-disc space-y-0.5 pl-4">
+                {blockedReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+
           {children}
         </CardBody>
 

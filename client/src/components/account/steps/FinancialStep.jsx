@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { financialSchema } from '@/lib/accountValidators.js';
+import { useGuardedSubmit } from '@/hooks/useGuardedSubmit.js';
 import {
   EMPLOYMENT_STATUSES,
   EMPLOYMENT_WITHOUT_EMPLOYER,
@@ -21,6 +22,8 @@ export function FinancialStep({ defaultValues, onSubmit, onBack, isSaving, serve
     defaultValues,
   });
 
+  const { submit, blockedReasons } = useGuardedSubmit(handleSubmit, onSubmit);
+
   const employmentStatus = watch('employmentStatus');
 
   // A student or retiree has no employer to name, so the field is hidden rather
@@ -34,7 +37,8 @@ export function FinancialStep({ defaultValues, onSubmit, onBack, isSaving, serve
       error={serverError}
       isSaving={isSaving}
       onBack={onBack}
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={submit}
+      blockedReasons={blockedReasons}
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Select

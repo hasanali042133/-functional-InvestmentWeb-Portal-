@@ -11,21 +11,48 @@ import { toNumber, round } from '../utils/money.js';
  * would change.
  */
 
-const NAV_FLOOR = 100;
-const NAV_CEILING = 130;
-const NAV_CENTRE = (NAV_FLOOR + NAV_CEILING) / 2;
-const HALF_BAND = (NAV_CEILING - NAV_FLOOR) / 2;
+/**
+ * A band and a step size per risk level, rather than one band for every fund.
+ *
+ * This is what makes the risk ladder mean something. An equity fund swings
+ * several points in a session and ranges widely; a money market fund barely
+ * moves, which is the entire reason somebody parks cash in one. Giving all
+ * three the same range and the same step made them behave identically and
+ * contradicted their own descriptions.
+ *
+ * `step` is the largest move in one tick, tuned for the five-minute cadence the
+ * scheduler runs at: visible between updates, without a day of ticks pinning
+ * the price to a boundary.
+ */
+const RISK_PROFILE = {
+  HIGH: { floor: 90, ceiling: 130, step: 5 },
+  MEDIUM: { floor: 100, ceiling: 120, step: 0.8 },
+  LOW: { floor: 100, ceiling: 108, step: 0.15 },
+};
 
-// Largest move per tick, in NAV points. Tuned for the five-minute cadence the
-// scheduler runs at: big enough to be visible on the charts between updates,
-// small enough that a full day of ticks wanders rather than saturating the band.
-//
-// Scaled by risk so the ladder still means something — a money market fund that
-// swung like an equity fund would contradict its own description.
-const TICK_STEP = { HIGH: 0.4, MEDIUM: 0.2, LOW: 0.07 };
+const profileFor = (riskLevel) => RISK_PROFILE[riskLevel] ?? RISK_PROFILE.MEDIUM;
 
 // How strongly the edges push back at the very edge of the band.
 const EDGE_BIAS = 0.45;
+
+/**
+ * How much the last move sways the next one.
+ *
+ * Without this every tick is close to a coin flip, and a coin flip alternates:
+ * up, down, up, down, which is not how a price behaves. Real moves come in
+ * runs — a fund slides for several ticks, then turns. Leaning towards whichever
+ * way it just went produces those runs while leaving every individual step
+ * genuinely uncertain.
+ */
+const MOMENTUM = 0.18;
+
+// Never let bias become certainty: a direction that cannot be bucked would turn
+// the walk into a straight line to the nearest bound.
+const MIN_CHANCE = 0.08;
+
+// The smallest a move can be, as a share of the step. Without a floor most
+// ticks land near zero and the price looks frozen between the occasional jump.
+const MIN_MAGNITUDE = 0.25;
 
 /**
  * One tick's move: a random step whose *direction* is biased by how close the
@@ -35,23 +62,38 @@ const EDGE_BIAS = 0.45;
  * inside the band without it sticking to a boundary — a clamp would pin the
  * price at 130 and leave it there for days at a time.
  */
-export const nextNav = (currentNav, riskLevel, random = Math.random) => {
+export const nextNav = (currentNav, riskLevel, { previousNav, random = Math.random } = {}) => {
+  const { floor, ceiling, step } = profileFor(riskLevel);
+  const centre = (floor + ceiling) / 2;
+  const halfBand = (ceiling - floor) / 2;
+
   const current = toNumber(currentNav);
-  const offset = (current - NAV_CENTRE) / HALF_BAND; // -1 at the floor, +1 at the ceiling
+  const offset = (current - centre) / halfBand; // -1 at the floor, +1 at the ceiling
 
   // Cubed, so the pull back is negligible through the middle of the band and
   // only bites near an edge. A linear bias behaves like constant mean
   // reversion: it holds the price around the midpoint and the fund never
   // explores the range it is supposed to move in.
-  const upChance = 0.5 - offset ** 3 * EDGE_BIAS;
+  const edgePush = -(offset ** 3) * EDGE_BIAS;
+
+  // Which way it went last time, read from the price itself rather than stored:
+  // the history already knows, and a column that could drift out of step with it
+  // would be one more thing to keep honest.
+  const previous = toNumber(previousNav);
+  const lastDirection = previous === null || previous === current ? 0 : Math.sign(current - previous);
+
+  const upChance = Math.min(
+    1 - MIN_CHANCE,
+    Math.max(MIN_CHANCE, 0.5 + edgePush + lastDirection * MOMENTUM),
+  );
 
   const direction = random() < upChance ? 1 : -1;
-  const magnitude = random() * (TICK_STEP[riskLevel] ?? TICK_STEP.MEDIUM);
+  const magnitude = (MIN_MAGNITUDE + (1 - MIN_MAGNITUDE) * random()) * step;
 
   const next = current + direction * magnitude;
 
   // Safety net only; the direction bias should keep the walk inside the band.
-  return round(Math.min(NAV_CEILING, Math.max(NAV_FLOOR, next)), 4);
+  return round(Math.min(ceiling, Math.max(floor, next)), 4);
 };
 
 // Intraday prices are kept for this long. They exist to show movement during
@@ -94,8 +136,19 @@ export const advanceNav = async ({ force = false } = {}) => {
 
     if (existing && !force) continue;
 
-    const previousNav = toNumber(product.currentNav);
-    const nav = nextNav(previousNav, product.riskLevel);
+    const currentNav = toNumber(product.currentNav);
+
+    // The tick before the current price, so the walk can carry its own
+    // momentum. `take: 2` because the newest tick *is* the current price.
+    const recent = await prisma.productNavTick.findMany({
+      where: { productId: product.id },
+      orderBy: { recordedAt: 'desc' },
+      take: 2,
+      select: { nav: true },
+    });
+
+    const previousNav = recent.length > 1 ? toNumber(recent[1].nav) : null;
+    const nav = nextNav(currentNav, product.riskLevel, { previousNav });
 
     await prisma.$transaction([
       prisma.productNavHistory.upsert({
@@ -115,9 +168,9 @@ export const advanceNav = async ({ force = false } = {}) => {
     moves.push({
       code: product.code,
       name: product.name,
-      previousNav,
+      previousNav: currentNav,
       nav,
-      changePct: round(((nav - previousNav) / previousNav) * 100, 2),
+      changePct: round(((nav - currentNav) / currentNav) * 100, 2),
     });
   }
 

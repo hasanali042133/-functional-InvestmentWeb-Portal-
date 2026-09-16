@@ -1,6 +1,7 @@
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { investmentProfileSchema } from '@/lib/accountValidators.js';
+import { useGuardedSubmit } from '@/hooks/useGuardedSubmit.js';
 import {
   INVESTMENT_OBJECTIVES,
   RISK_PROFILES,
@@ -22,6 +23,8 @@ export function InvestmentProfileStep({ defaultValues, onSubmit, onBack, isSavin
     defaultValues,
   });
 
+  const { submit, blockedReasons } = useGuardedSubmit(handleSubmit, onSubmit);
+
   return (
     <StepShell
       title="Investment profile"
@@ -29,7 +32,8 @@ export function InvestmentProfileStep({ defaultValues, onSubmit, onBack, isSavin
       error={serverError}
       isSaving={isSaving}
       onBack={onBack}
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={submit}
+      blockedReasons={blockedReasons}
       submitLabel="Save and continue"
     >
       <Controller

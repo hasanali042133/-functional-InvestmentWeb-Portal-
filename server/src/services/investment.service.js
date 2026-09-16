@@ -74,7 +74,12 @@ export const listTransactions = async ({ userId, page, limit }) => {
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-      include: { product: { select: { name: true } } },
+      include: {
+        product: { select: { name: true } },
+        // What the money actually bought. Without it a transaction is just an
+        // amount and a date, which is not enough to answer "what did I get?".
+        investment: { select: { units: true, navAtPurchase: true } },
+      },
     }),
     prisma.transaction.count({ where: { userId } }),
   ]);

@@ -14,7 +14,26 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <title>Investment Portal</title>
+    <title>Nivesta</title>
+
+    <!--
+      Applied before the first paint, so a customer who prefers dark does not
+      get a white flash on every page load. Deliberately inline and tiny: it has
+      to run before the stylesheet and the bundle.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('investment-portal.theme');
+          var dark = stored
+            ? stored === 'dark'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (error) {
+          /* Blocked storage just means the default theme. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

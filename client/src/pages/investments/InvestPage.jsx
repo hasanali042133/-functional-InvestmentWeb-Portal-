@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as productsApi from '@/api/products.api.js';
@@ -21,6 +21,12 @@ const QUICK_AMOUNTS = [25000, 50000, 100000, 250000];
 
 export default function InvestPage() {
   const { id } = useParams();
+  const location = useLocation();
+
+  // Carried from the product page, where the customer already typed it. It is
+  // only a starting value — the schema below still checks it against the fund's
+  // minimum and the balance actually available.
+  const startingAmount = location.state?.amount ?? '';
   const navigate = useNavigate();
 
   // The price is live, so the quote on screen keeps up with it rather than
@@ -53,7 +59,11 @@ export default function InvestPage() {
     watch,
     setValue,
     formState: { errors },
-  } = useForm({ resolver: zodResolver(schema), mode: 'onTouched', defaultValues: { amount: '' } });
+  } = useForm({
+    resolver: zodResolver(schema),
+    mode: 'onTouched',
+    defaultValues: { amount: startingAmount },
+  });
 
   const amount = Number(watch('amount')) || 0;
 

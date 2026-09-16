@@ -35,10 +35,53 @@ export const registerSchema = z
     message: 'Passwords do not match.',
   });
 
-export const loginSchema = z.object({
+const newPassword = z
+  .string()
+  .min(8, 'Use at least 8 characters.')
+  .max(72, 'This is too long.')
+  .regex(/[A-Za-z]/, 'Include a letter.')
+  .regex(/[0-9]/, 'Include a number.');
+
+const otpCode = z
+  .string()
+  .trim()
+  .regex(/^[0-9]{6}$/, 'Enter the 6-digit code from your email.');
+
+/** Step one of signing in: credentials only. */
+export const loginCredentialsSchema = z.object({
   email,
   password: z.string().min(1, 'Enter your password.'),
 });
+
+/**
+ * Step two: the same credentials, with the emailed code.
+ *
+ * The code is optional here because a browser the customer has been remembered
+ * on does not need one. Whether it is actually required is decided where that
+ * is known — on the screen, and again on the server.
+ */
+export const loginSchema = loginCredentialsSchema.extend({
+  // `.optional()` accepts undefined but not '', and an untouched input holds
+  // ''. Without the empty-string branch a remembered device — which never
+  // renders the code field at all — could not submit the form.
+  code: otpCode.optional().or(z.literal('')),
+  rememberDevice: z.boolean().optional(),
+});
+
+export const forgotPasswordSchema = z.object({
+  email,
+});
+
+export const resetPasswordSchema = z
+  .object({
+    code: otpCode,
+    password: newPassword,
+    confirmPassword: z.string().min(1, 'Re-enter your password.'),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match.',
+  });
 
 export const otpSchema = z.object({
   code: z

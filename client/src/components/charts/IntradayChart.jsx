@@ -44,7 +44,7 @@ export function IntradayChart({ data = [], height = 280, colour = null }) {
           </linearGradient>
         </defs>
 
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-slate-200)" vertical={false} />
 
         <XAxis
           dataKey="at"
@@ -54,7 +54,7 @@ export function IntradayChart({ data = [], height = 280, colour = null }) {
           tickLine={false}
           axisLine={false}
           minTickGap={48}
-          tick={{ fill: '#64748b', fontSize: 12 }}
+          tick={{ fill: 'var(--color-slate-400)', fontSize: 12 }}
           tickFormatter={formatAxisTime}
         />
 
@@ -63,15 +63,17 @@ export function IntradayChart({ data = [], height = 280, colour = null }) {
           tickLine={false}
           axisLine={false}
           width={56}
-          tick={{ fill: '#64748b', fontSize: 12 }}
+          tick={{ fill: 'var(--color-slate-400)', fontSize: 12 }}
           tickFormatter={(value) => formatNumber(value, 2)}
         />
 
         <Tooltip
-          cursor={{ stroke: '#94a3b8', strokeDasharray: '3 3' }}
+          cursor={{ stroke: 'var(--color-slate-500)', strokeDasharray: '3 3' }}
           contentStyle={{
             borderRadius: 10,
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--color-slate-200)',
+            backgroundColor: 'var(--color-white)',
+            color: 'var(--color-slate-900)',
             boxShadow: '0 8px 24px rgb(15 23 42 / 0.08)',
             fontSize: 13,
           }}
@@ -86,7 +88,7 @@ export function IntradayChart({ data = [], height = 280, colour = null }) {
           strokeWidth={2}
           fill="url(#intradayFill)"
           dot={false}
-          activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }}
+          activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-white)' }}
           isAnimationActive={false}
         />
       </AreaChart>

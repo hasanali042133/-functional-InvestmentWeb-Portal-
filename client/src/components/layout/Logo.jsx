@@ -29,7 +29,7 @@ export function Logo({ className, onDark = false }) {
           onDark ? 'text-white' : 'text-slate-900',
         )}
       >
-        Investment Portal
+        Nivesta
       </span>
     </span>
   );

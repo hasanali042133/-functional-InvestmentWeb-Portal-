@@ -7,12 +7,12 @@ import { formatCurrency, formatPercent } from '@/lib/format.js';
  * green is the cautious holding, red the adventurous one.
  */
 const RISK_COLOURS = {
-  LOW: '#0d9488',
+  LOW: '#10b981',
   MEDIUM: '#f59e0b',
   HIGH: '#e11d48',
 };
 
-const FALLBACK = '#64748b';
+const FALLBACK = 'var(--color-slate-400)';
 
 export function DistributionChart({ holdings = [], height = 260 }) {
   if (holdings.length === 0) return null;
@@ -56,7 +56,9 @@ export function DistributionChart({ holdings = [], height = 260 }) {
             <Tooltip
               contentStyle={{
                 borderRadius: 10,
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--color-slate-200)',
+            backgroundColor: 'var(--color-white)',
+            color: 'var(--color-slate-900)',
                 boxShadow: '0 8px 24px rgb(15 23 42 / 0.08)',
                 fontSize: 13,
               }}

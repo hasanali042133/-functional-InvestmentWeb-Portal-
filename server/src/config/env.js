@@ -26,8 +26,19 @@ const envSchema = z.object({
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().nonnegative().default(60),
 
-  RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('Investment Portal <onboarding@resend.dev>'),
+  // Email goes out over SMTP. With no credentials the code is logged to the
+  // console instead, so development needs no external account.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+
+  // Optional: defaults to SMTP_USER, which is the only sender Gmail accepts
+  // from an authenticated account anyway.
+  EMAIL_FROM: z.string().optional(),
+
+  // How long a browser stays trusted after the customer asks to be remembered.
+  TRUSTED_DEVICE_DAYS: z.coerce.number().int().positive().default(7),
 
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),

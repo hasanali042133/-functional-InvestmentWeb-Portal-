@@ -8,6 +8,7 @@ import { AuthLayout } from '@/components/layout/AuthLayout.jsx';
 import { Input, PasswordInput } from '@/components/ui/Field.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Alert } from '@/components/ui/Alert.jsx';
+import { MailIcon, LockIcon, UserIcon } from '@/components/ui/FieldIcons.jsx';
 import { cn } from '@/lib/cn.js';
 
 export default function RegisterPage() {
@@ -45,6 +46,7 @@ export default function RegisterPage() {
         replace: true,
         state: {
           email: data.verification.email,
+          expiresAt: data.verification.expiresAt,
           resendAfterSeconds: data.verification.resendAfterSeconds,
           devOtp: data.verification.devOtp,
           emailDelivered: data.verification.emailDelivered,
@@ -67,15 +69,49 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout
-      title="Create your account"
+      title="Create your free account"
       subtitle="Start with your details. We will email you a code to verify your address."
-      footer={
-        <>
-          Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-brand-700 hover:text-brand-800">
-            Sign in
-          </Link>
-        </>
+      panelEyebrow="Free account"
+      panelTitle="Everything you need to invest."
+      panelText="Open an account online, choose a fund that matches your risk appetite, and follow its value from the same workspace."
+      altAction={
+        <Link
+          to="/login"
+          className="group hover:bg-brand-50 hover:ring-brand-200 flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200 transition-colors ring-inset"
+        >
+          <span className="bg-brand-100 text-brand-700 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+            <svg
+              className="h-[18px] w-[18px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4" />
+              <path d="m16 17 5-5-5-5" />
+              <path d="M21 12H9" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs text-slate-500">Already have an account?</span>
+            <span className="block text-sm font-semibold text-slate-900">Log in to Nivesta</span>
+          </span>
+          <svg
+            className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14m-6-6 6 6-6 6" />
+          </svg>
+        </Link>
       }
     >
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
@@ -86,6 +122,7 @@ export default function RegisterPage() {
           required
           autoComplete="name"
           placeholder="Enter your full name"
+          icon={<UserIcon />}
           error={errors.fullName?.message}
           {...register('fullName')}
         />
@@ -94,8 +131,9 @@ export default function RegisterPage() {
           label="Email address"
           type="email"
           required
-          autoComplete="email"
-          placeholder="Enter your email address"
+          autoComplete="username"
+          placeholder="name@example.com"
+          icon={<MailIcon />}
           error={errors.email?.message}
           {...register('email')}
         />
@@ -105,7 +143,8 @@ export default function RegisterPage() {
             label="Password"
             required
             autoComplete="new-password"
-            placeholder="Enter a password"
+            placeholder="At least 8 characters"
+          icon={<LockIcon />}
             error={errors.password?.message}
             {...register('password')}
           />
@@ -143,6 +182,7 @@ export default function RegisterPage() {
           required
           autoComplete="new-password"
           placeholder="Re-enter your password"
+          icon={<LockIcon />}
           error={errors.confirmPassword?.message}
           {...register('confirmPassword')}
         />

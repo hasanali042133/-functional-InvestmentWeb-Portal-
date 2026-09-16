@@ -35,7 +35,13 @@ console.log('\n=== AUTHORISATION ===');
 const anon = await call('/api/products');
 check('listing requires a token', anon.status === 401, `${anon.status} ${anon.body.code}`);
 
-const login = await call('/api/auth/login', { method: 'POST', body: DEMO });
+// Signing in is two steps now: credentials earn an emailed code, then the code
+// and the credentials together earn the token.
+const requested = await call('/api/auth/login/request-code', { method: 'POST', body: DEMO });
+const loginCode = requested.body.data?.devOtp;
+const login = loginCode
+  ? await call('/api/auth/login', { method: 'POST', body: { ...DEMO, code: loginCode } })
+  : requested;
 check('demo account can sign in', login.status === 200, `${login.status}`);
 const token = login.body.data?.token;
 

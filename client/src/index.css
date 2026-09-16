@@ -10,21 +10,21 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #d9e5ff;
-  --color-brand-200: #bcd0ff;
-  --color-brand-300: #8eb0ff;
-  --color-brand-400: #5985fd;
-  --color-brand-500: #345ef8;
-  --color-brand-600: #1f3ded;
-  --color-brand-700: #1a2fd9;
-  --color-brand-800: #1c29b0;
-  --color-brand-900: #1e2a8b;
-  --color-brand-950: #161b54;
+  --color-brand-50: #ecfdf7;
+  --color-brand-100: #d1f7ec;
+  --color-brand-200: #a6eddc;
+  --color-brand-300: #6eddc6;
+  --color-brand-400: #36c6ad;
+  --color-brand-500: #14aa93;
+  --color-brand-600: #0f8d79;
+  --color-brand-700: #0d7c6c;
+  --color-brand-800: #0c6154;
+  --color-brand-900: #0b4f45;
+  --color-brand-950: #04302a;
 
-  --color-accent-400: #2dd4bf;
-  --color-accent-500: #14b8a6;
-  --color-accent-600: #0d9488;
+  --color-accent-400: #34d399;
+  --color-accent-500: #10b981;
+  --color-accent-600: #059669;
 
   --color-gain: #047857;
   --color-gain-soft: #ecfdf5;
@@ -179,4 +179,104 @@
       @apply translate-y-0 transition-none;
     }
   }
+}
+
+/* ---------------------------------------------------------------- dark mode
+   Tailwind emits every theme colour as a CSS variable — `bg-white` compiles to
+   `background-color: var(--color-white)`. Redefining those variables under
+   `.dark` therefore flips the whole application at once, instead of hanging a
+   `dark:` variant off several hundred utilities across fifty files and getting
+   some of them wrong.
+
+   The slate ramp is inverted rather than replaced, so a utility keeps its
+   meaning: slate-50 is still the page behind the cards, slate-900 is still the
+   strongest text, and every component that was built against those roles
+   continues to read correctly. */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces: white is the card, slate-50 the page behind it. */
+  --color-white: #131c2e;
+  --color-slate-50: #0b1120;
+  --color-slate-100: #1b2537;
+  --color-slate-200: #273249;
+  --color-slate-300: #38455f;
+
+  /* Text and icons, running from faintest to strongest. */
+  --color-slate-400: #64748b;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #b6c2d4;
+  --color-slate-700: #d5dded;
+  --color-slate-800: #e8edf6;
+  --color-slate-900: #f5f8fc;
+  --color-slate-950: #ffffff;
+
+  /* Tinted surfaces — the active nav pill, empty-state icons, hovered rows.
+     Only the pale end of the brand ramp moves: the strong end is what buttons
+     are painted with and has to stay a real blue. */
+  --color-brand-50: #0c2b26;
+  --color-brand-100: #103a32;
+  --color-brand-200: #164e43;
+
+  --color-gain-soft: #10291f;
+  --color-loss-soft: #2b1420;
+}
+
+/* Brand, gain and loss carry text as well as fills, so a single variable cannot
+   serve both: `bg-brand-700` has to stay a strong blue while `text-brand-700`
+   has to be legible on a dark card. These few are the exception that earns a
+   direct override. */
+.dark .text-brand-600,
+.dark .text-brand-700 {
+  color: #5fd6b8;
+}
+
+.dark .text-brand-800,
+.dark .text-brand-950 {
+  color: #8ee6cd;
+}
+
+.dark .hover\:text-brand-700:hover,
+.dark .hover\:text-brand-800:hover,
+.dark .group:hover .group-hover\:text-brand-800 {
+  color: #a9eeda;
+}
+
+/* `bg-white` becoming a dark card is the point of the inversion, but `text-white`
+   is only ever used on a coloured chip or button — a primary button whose label
+   turned dark would be unreadable on its own background. */
+.dark .text-white {
+  color: #ffffff;
+}
+
+.dark .text-gain {
+  color: #34d399;
+}
+
+.dark .text-loss {
+  color: #fb7185;
+}
+
+/* The shadows that lift a card off a light page are invisible on a dark one;
+   a slightly stronger ring does that job instead. */
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl {
+  --tw-shadow-color: rgb(0 0 0 / 0.5);
+}
+
+/* A panel that is dark in both themes has to keep the light-mode palette
+   inside it, or dark mode inverts its text to dark-on-dark and the content
+   disappears. Scoping the same variables to the subtree is the whole fix. */
+.theme-static {
+  --color-white: #ffffff;
+  --color-brand-50: #ecfdf6;
+  --color-brand-100: #d0f7e9;
+  --color-brand-200: #a3edd6;
+  --color-slate-200: #e2e8f0;
+  --color-slate-400: #94a3b8;
 }

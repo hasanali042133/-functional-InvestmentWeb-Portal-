@@ -1,23 +1,30 @@
 import { forwardRef, useId, useState } from 'react';
 import { cn } from '@/lib/cn.js';
 
-const controlBase =
+// Exported so a field that has to be composed by hand — an input with a button
+// beside it, say — still looks like every other control.
+export const controlBase =
   'block w-full rounded-lg border-0 bg-white px-3.5 text-slate-900 shadow-sm ' +
   'ring-1 ring-slate-300 ring-inset placeholder:text-slate-400 ' +
   'focus:ring-2 focus:ring-brand-600 focus:outline-none ' +
   'disabled:bg-slate-50 disabled:text-slate-500';
 
-const invalidRing = 'ring-rose-400 focus:ring-rose-500';
+export const invalidRing = 'ring-rose-400 focus:ring-rose-500';
 
 /** Label + control + hint/error, so every field is laid out identically. */
-export function Field({ label, htmlFor, error, hint, required, children, className }) {
+export function Field({ label, htmlFor, error, hint, required, action, children, className }) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      {label && (
-        <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-700">
-          {label}
-          {required && <span className="ml-0.5 text-rose-600">*</span>}
-        </label>
+      {(label || action) && (
+        <div className="flex items-baseline justify-between gap-3">
+          {label && (
+            <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-700">
+              {label}
+              {required && <span className="ml-0.5 text-rose-600">*</span>}
+            </label>
+          )}
+          {action}
+        </div>
       )}
       {children}
       {error ? (
@@ -29,29 +36,55 @@ export function Field({ label, htmlFor, error, hint, required, children, classNa
   );
 }
 
+/** Wraps a control so a leading icon can sit inside it without being clickable. */
+function WithIcon({ icon, children }) {
+  if (!icon) return children;
+
+  return (
+    <div className="relative">
+      <span
+        className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-slate-400"
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export const Input = forwardRef(function Input(
-  { label, error, hint, required, className, id, type = 'text', ...props },
+  { label, error, hint, required, className, id, type = 'text', icon, action, ...props },
   ref,
 ) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
 
   return (
-    <Field label={label} htmlFor={inputId} error={error} hint={hint} required={required}>
-      <input
-        ref={ref}
-        id={inputId}
-        type={type}
-        aria-invalid={error ? 'true' : undefined}
-        className={cn(controlBase, 'h-11', error && invalidRing, className)}
-        {...props}
-      />
+    <Field
+      label={label}
+      htmlFor={inputId}
+      error={error}
+      hint={hint}
+      required={required}
+      action={action}
+    >
+      <WithIcon icon={icon}>
+        <input
+          ref={ref}
+          id={inputId}
+          type={type}
+          aria-invalid={error ? 'true' : undefined}
+          className={cn(controlBase, 'h-11', icon && 'pl-10', error && invalidRing, className)}
+          {...props}
+        />
+      </WithIcon>
     </Field>
   );
 });
 
 export const PasswordInput = forwardRef(function PasswordInput(
-  { label, error, hint, required, id, ...props },
+  { label, error, hint, required, id, icon, action, ...props },
   ref,
 ) {
   const [visible, setVisible] = useState(false);
@@ -59,14 +92,29 @@ export const PasswordInput = forwardRef(function PasswordInput(
   const inputId = id ?? generatedId;
 
   return (
-    <Field label={label} htmlFor={inputId} error={error} hint={hint} required={required}>
+    <Field
+      label={label}
+      htmlFor={inputId}
+      error={error}
+      hint={hint}
+      required={required}
+      action={action}
+    >
       <div className="relative">
+        {icon && (
+          <span
+            className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-center text-slate-400"
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        )}
         <input
           ref={ref}
           id={inputId}
           type={visible ? 'text' : 'password'}
           aria-invalid={error ? 'true' : undefined}
-          className={cn(controlBase, 'h-11 pr-11', error && invalidRing)}
+          className={cn(controlBase, 'h-11 pr-11', icon && 'pl-10', error && invalidRing)}
           {...props}
         />
         <button

@@ -4,6 +4,9 @@ import { useAuth } from '@/hooks/useAuth.js';
 import { initialsOf } from '@/lib/format.js';
 import { cn } from '@/lib/cn.js';
 import { Logo } from './Logo.jsx';
+import { Footer } from './Footer.jsx';
+import { ThemeToggle } from '@/components/ui/ThemeToggle.jsx';
+import { NavSearch } from './NavSearch.jsx';
 
 /** Shared wrapper so every nav icon lines up at the same weight and size. */
 function Icon({ children, className }) {
@@ -63,20 +66,18 @@ const NAV_ITEMS = [
 ];
 
 /**
- * Navigation link inside the segmented group.
+ * Navigation link.
  *
- * The whole group sits in one recessed track with the current page raised out of
- * it, so the four destinations read as one control rather than four loose links.
- * Text only here: the icons stay for the mobile menu, where the list is vertical
- * and has room for them.
+ * Plain text rather than a boxed control, with the current page carried by
+ * weight and colour alone — on a header this crowded, four filled pills compete
+ * with the account menu and the primary action beside them.
  */
 function navLinkClasses({ isActive }) {
   return cn(
-    'relative rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap',
-    'transition-colors duration-200',
+    'relative rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors duration-150',
     isActive
-      ? 'bg-brand-700 text-white shadow-sm'
-      : 'text-slate-600 hover:text-slate-900',
+      ? 'text-brand-700 font-semibold'
+      : 'font-medium text-slate-600 hover:text-slate-900',
   );
 }
 
@@ -189,17 +190,21 @@ export function AppLayout() {
         )}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
-          <div className="flex flex-1 items-center">
+          <div className="flex flex-1 items-center gap-4">
             <NavLink
               to="/dashboard"
               aria-label="Go to dashboard"
-              className="rounded-lg transition-opacity hover:opacity-80"
+              className="shrink-0 rounded-lg transition-opacity hover:opacity-80"
             >
               <Logo />
             </NavLink>
+
+            {/* Given room on wide screens only: on a laptop the nav links and
+                the account menu need the space more than search does. */}
+            <NavSearch className="hidden w-full max-w-xs xl:block" />
           </div>
 
-          <nav className="hidden items-center gap-1 rounded-full bg-slate-100/80 p-1 ring-1 ring-slate-200/70 ring-inset md:flex">
+          <nav className="hidden items-center gap-1 md:flex">
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.to} to={item.to} className={navLinkClasses}>
                 {item.label}
@@ -207,7 +212,8 @@ export function AppLayout() {
             ))}
           </nav>
 
-          <div className="flex flex-1 items-center justify-end gap-2">
+          <div className="flex flex-1 items-center justify-end gap-1">
+            <ThemeToggle />
             <UserMenu user={user} onSignOut={signOut} />
 
             <button
@@ -235,6 +241,11 @@ export function AppLayout() {
         {menuOpen && (
           <nav className="animate-drop border-t border-slate-200 bg-white px-4 py-3 md:hidden">
             <div className="flex flex-col gap-1">
+              {/* Search lives in the header only from `xl` up, where there is
+                  room beside the links. Without it here a phone would lose the
+                  feature entirely. */}
+              <NavSearch className="mb-2" />
+
               {NAV_ITEMS.map((item) => (
                 <NavLink
                   key={item.to}
@@ -271,9 +282,17 @@ export function AppLayout() {
         )}
       </header>
 
-      <main key={currentPath} className="animate-rise mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <Outlet />
-      </main>
+      {/* The page grows, the footer stays at the bottom of short screens. */}
+      <div className="flex min-h-[calc(100dvh-4rem)] flex-col">
+        <main
+          key={currentPath}
+          className="animate-rise mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8"
+        >
+          <Outlet />
+        </main>
+
+        <Footer />
+      </div>
     </div>
   );
 }

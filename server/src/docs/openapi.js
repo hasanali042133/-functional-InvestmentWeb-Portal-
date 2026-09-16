@@ -37,7 +37,8 @@ const Verification = {
     emailDelivered: {
       type: 'boolean',
       example: false,
-      description: 'False when RESEND_API_KEY is unset — the code is logged to the server console instead.',
+      description:
+        'False when SMTP is not configured, or when the send failed — the code is logged to the server console instead.',
     },
     devOtp: {
       type: 'string',
@@ -516,12 +517,12 @@ export const openApiSpec = {
       },
     },
 
-    '/api/auth/login': {
+    '/api/auth/login/request-code': {
       post: {
         tags: ['Authentication'],
-        summary: 'Sign in',
+        summary: 'Sign in (step one: send a code to the customer)',
         description:
-          'An unknown email and a wrong password return an identical response, so the endpoint cannot be used to discover which addresses are registered.',
+          'Checks the password, then emails a single-use sign-in code. The password is required before any code goes out: sending on an email address alone would let anyone flood a customer inbox, and would confirm which addresses have accounts.',
         requestBody: {
           required: true,
           content: {
@@ -539,6 +540,188 @@ export const openApiSpec = {
         },
         responses: {
           200: {
+            description: 'Code sent',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: {
+                      email: { type: 'string', format: 'email' },
+                      expiresAt: { type: 'string', format: 'date-time' },
+                      resendAfterSeconds: { type: 'integer', example: 60 },
+                      emailDelivered: { type: 'boolean', example: true },
+                      devOtp: {
+                        type: 'string',
+                        example: '123456',
+                        description: 'Only present when EXPOSE_DEV_OTP is on.',
+                      },
+                    },
+                  },
+                  { message: 'A sign-in code has been sent to your email.' },
+                ),
+              },
+            },
+          },
+          401: jsonError('Incorrect credentials', {
+            success: false,
+            message: 'Incorrect email or password.',
+            code: 'INVALID_CREDENTIALS',
+          }),
+          403: jsonError('Email not verified yet', {
+            success: false,
+            message: 'Please verify your email address before signing in.',
+            code: 'EMAIL_NOT_VERIFIED',
+          }),
+          422: validationError,
+          429: jsonError('Asked again too soon', {
+            success: false,
+            message: 'Please wait 45 seconds before requesting another code.',
+            code: 'OTP_COOLDOWN',
+          }),
+        },
+      },
+    },
+
+    '/api/auth/forgot-password': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Send a password reset code',
+        description:
+          'Always answers the same way, whether or not the address has an account, and whether or not a cooldown is in force. A reset form that admits no such account exists is a list of everybody who banks here, free to anyone who asks.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                  email: { type: 'string', format: 'email', example: 'assessment@example.com' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Answered identically for every address',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: {
+                      email: { type: 'string', format: 'email' },
+                      resendAfterSeconds: { type: 'integer', example: 60 },
+                      expiresAt: {
+                        type: 'string',
+                        format: 'date-time',
+                        description: 'Present only when a code was actually issued.',
+                      },
+                      emailDelivered: { type: 'boolean' },
+                    },
+                  },
+                  { message: 'If that email address has an account, a reset code is on its way.' },
+                ),
+              },
+            },
+          },
+          422: validationError,
+        },
+      },
+    },
+
+    '/api/auth/reset-password': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Set a new password using a reset code',
+        description:
+          'The code is spent on use. The new password is held to the signup policy, since the customer is choosing it now rather than recalling an old one, and a token comes back because holding the inbox is the same proof signing in asks for.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email', 'code', 'password'],
+                properties: {
+                  email: { type: 'string', format: 'email', example: 'assessment@example.com' },
+                  code: { type: 'string', example: '123456' },
+                  password: { type: 'string', example: 'Passw0rd123' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Password changed and signed in',
+            content: {
+              'application/json': {
+                schema: envelope(
+                  {
+                    type: 'object',
+                    properties: {
+                      user: { $ref: '#/components/schemas/User' },
+                      token: { type: 'string' },
+                    },
+                  },
+                  { message: 'Your password has been changed. You are now signed in.' },
+                ),
+              },
+            },
+          },
+          400: jsonError('Code rejected', {
+            success: false,
+            message: 'That code is incorrect. You have 4 attempts left.',
+            code: 'OTP_INVALID',
+          }),
+          422: validationError,
+        },
+      },
+    },
+
+    '/api/auth/login': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Sign in (step two: credentials and the emailed code)',
+        description:
+          'The password is checked again alongside the code. Without that, a code lifted from an inbox would be enough on its own, which is the opposite of what a second factor is for. The code is spent on use and cannot be replayed. An unknown email and a wrong password return an identical response, so the endpoint cannot be used to discover which addresses are registered.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email', 'password'],
+                description:
+                  'Either a code or a token from a remembered device is required. The password always is.',
+                properties: {
+                  email: { type: 'string', format: 'email', example: 'assessment@example.com' },
+                  password: { type: 'string', example: 'Passw0rd123' },
+                  code: {
+                    type: 'string',
+                    example: '123456',
+                    description: 'Not needed when a valid deviceToken is sent.',
+                  },
+                  deviceToken: {
+                    type: 'string',
+                    description:
+                      'Issued by an earlier sign-in that asked to be remembered. Skips the code, never the password.',
+                  },
+                  rememberDevice: {
+                    type: 'boolean',
+                    description:
+                      'Ask for a device token back. Honoured only on a sign-in that passed the code, so a stolen password cannot mint one.',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
             description: 'Signed in',
             content: {
               'application/json': {
@@ -548,6 +731,16 @@ export const openApiSpec = {
                     properties: {
                       user: { $ref: '#/components/schemas/User' },
                       token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+                      usedTrustedDevice: { type: 'boolean', example: false },
+                      device: {
+                        type: 'object',
+                        description:
+                          'Present only when rememberDevice was asked for and granted. Store the token; it is shown once.',
+                        properties: {
+                          token: { type: 'string' },
+                          expiresAt: { type: 'string', format: 'date-time' },
+                        },
+                      },
                     },
                   },
                   { message: 'Signed in successfully.' },
@@ -555,6 +748,11 @@ export const openApiSpec = {
               },
             },
           },
+          400: jsonError('Neither a code nor a remembered device', {
+            success: false,
+            message: 'Enter the code we emailed you, or request a new one.',
+            code: 'LOGIN_CODE_REQUIRED',
+          }),
           401: jsonError('Incorrect credentials', {
             success: false,
             message: 'Incorrect email or password.',

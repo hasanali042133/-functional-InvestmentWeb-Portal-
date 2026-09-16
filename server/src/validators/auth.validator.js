@@ -46,10 +46,42 @@ export const resendOtpSchema = z.object({
   email,
 });
 
+// Login deliberately does not enforce the signup password policy — an old or
+// mistyped password should fail as "invalid credentials", not as a validation
+// error that reveals the policy.
+const existingPassword = z
+  .string({ required_error: 'Enter your password.' })
+  .min(1, 'Enter your password.');
+
+/** Step one of signing in: credentials only, which earns an emailed code. */
+export const loginCodeSchema = z.object({
+  email,
+  password: existingPassword,
+});
+
+/**
+ * Step two: the same credentials, with either the code or a remembered device.
+ *
+ * Both are optional here and the service decides which it will accept — a
+ * schema that demanded the code would reject a perfectly good sign-in from a
+ * browser that no longer needs one.
+ */
 export const loginSchema = z.object({
   email,
-  // Login deliberately does not enforce the signup password policy — an old or
-  // mistyped password should fail as "invalid credentials", not as a validation
-  // error that reveals the policy.
-  password: z.string({ required_error: 'Enter your password.' }).min(1, 'Enter your password.'),
+  password: existingPassword,
+  code: otpCode.optional(),
+  deviceToken: z.string().trim().min(1).max(200).optional(),
+  rememberDevice: z.boolean().optional(),
+});
+
+export const forgotPasswordSchema = z.object({
+  email,
+});
+
+// The new password is held to the signup policy, since the customer is choosing
+// it now rather than recalling an old one.
+export const resetPasswordSchema = z.object({
+  email,
+  code: otpCode,
+  password,
 });

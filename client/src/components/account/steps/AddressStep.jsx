@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addressSchema } from '@/lib/accountValidators.js';
+import { useGuardedSubmit } from '@/hooks/useGuardedSubmit.js';
 import { PROVINCES, COUNTRIES } from '@/lib/accountOptions.js';
 import { StepShell } from '../StepShell.jsx';
 import { Input, Select, Textarea } from '@/components/ui/Field.jsx';
@@ -16,6 +17,8 @@ export function AddressStep({ defaultValues, onSubmit, onBack, isSaving, serverE
     defaultValues,
   });
 
+  const { submit, blockedReasons } = useGuardedSubmit(handleSubmit, onSubmit);
+
   return (
     <StepShell
       title="Address information"
@@ -23,7 +26,8 @@ export function AddressStep({ defaultValues, onSubmit, onBack, isSaving, serverE
       error={serverError}
       isSaving={isSaving}
       onBack={onBack}
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={submit}
+      blockedReasons={blockedReasons}
     >
       <Textarea
         label="Residential address"

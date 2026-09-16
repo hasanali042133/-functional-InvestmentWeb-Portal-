@@ -1,4 +1,4 @@
-# Investment / Account Opening Portal
+# Nivesta — Investment / Account Opening Portal
 
 A full-stack investment account opening portal: customers sign up with email OTP
 verification, complete a KYC account opening application with document upload,
@@ -14,7 +14,7 @@ fund prices move.
 | Database | PostgreSQL with Prisma ORM |
 | Auth | JWT access tokens, bcrypt password hashing |
 | Validation | Zod (shared between client and server) |
-| Email | Resend |
+| Email | SMTP via Nodemailer |
 | File storage | Cloudinary, with a local-disk fallback for development |
 | API docs | Swagger UI (OpenAPI 3) |
 
@@ -58,11 +58,12 @@ on, so user-facing copy can change without breaking client logic.
 
 ## Database
 
-Nine entities model the full journey from signup to portfolio.
+Ten entities model the full journey from signup to portfolio.
 
 ```mermaid
 erDiagram
     USERS ||--o{ OTPS : "is sent"
+    USERS ||--o{ TRUSTED_DEVICES : "signs in from"
     USERS ||--o| APPLICATIONS : "submits"
     USERS ||--o{ DOCUMENTS : "uploads"
     USERS ||--o{ INVESTMENTS : "holds"
@@ -88,10 +89,20 @@ erDiagram
         uuid id PK
         uuid user_id FK
         string code_hash
-        enum purpose
+        enum purpose "EMAIL_VERIFICATION LOGIN PASSWORD_RESET"
         int attempts
         timestamp expires_at
         timestamp consumed_at
+        timestamp created_at
+    }
+
+    TRUSTED_DEVICES {
+        uuid id PK
+        uuid user_id FK
+        string token_hash UK
+        string label
+        timestamp last_used_at
+        timestamp expires_at
         timestamp created_at
     }
 
@@ -225,16 +236,74 @@ exists to show movement during the day. Keeping them apart means
 `product_nav_history` stays one clean row per day, while `product_nav_ticks`
 can be pruned to a rolling 48-hour window without touching history.
 
+**Dark mode is a palette swap, not a second set of styles.** Tailwind emits
+every theme colour as a CSS variable, so `bg-white` compiles to
+`background-color: var(--color-white)`. Redefining those variables under a
+`.dark` class flips the whole application at once. The slate ramp is inverted
+rather than replaced, so each utility keeps its meaning — slate-50 is still the
+page behind the cards, slate-900 still the strongest text — and every component
+built against those roles keeps reading correctly. Only the handful of tokens
+that carry both a fill and a text colour (`brand`, `gain`, `loss`) need a direct
+override, and a panel that is dark in both themes re-scopes the light palette to
+its own subtree.
+
 **Fund prices are simulated, and that is stated rather than hidden.** There is
 no market behind this application, so the server publishes a new price for each
-fund every five minutes: a random walk between 100 and 130 whose step size is
-scaled by the fund's risk level. The direction of each move is biased by how
-close the price is to an edge rather than clamped at the boundary, which keeps
-the walk inside the band without it sticking to a bound for days. Set
-`NAV_SIMULATION=false` to freeze prices, which is where a real feed would be
+fund every five minutes: a random walk whose band and step size both come from
+the fund's risk level.
+
+| Fund | Risk | Band | Largest move per tick |
+| --- | --- | --- | --- |
+| Growth Fund | High | 90 – 130 | 5.00 |
+| Income Fund | Medium | 100 – 120 | 0.80 |
+| Money Market Fund | Low | 100 – 108 | 0.15 |
+
+Giving all three the same range would make them behave identically and
+contradict their own descriptions — an equity fund swings several points in a
+session, while a money market fund barely moves, which is the whole reason
+somebody parks cash in one.
+
+Two things shape each move.
+
+**The edges push back**, by biasing the *direction* rather than clamping the
+result. A clamp pins the price against the bound and leaves it there; a bias
+lets the walk touch an edge and come straight back.
+
+**The last move sways the next one.** Without that, every tick is close to a
+coin flip — and a coin flip alternates: up, down, up, down, which is not how a
+price behaves. Leaning towards whichever way it just went produces runs, so a
+fund can slide for several ticks before it turns, while each individual step
+stays genuinely uncertain. Every move also has a minimum size, or most ticks
+land near zero and the price looks frozen between occasional jumps.
+
+Measured over thirty simulated days, the high-risk fund covers its full band,
+moves 3.10 on average and up to 5.00, holds a direction for 2.81 ticks on
+average (longest run 13), and sits on a boundary for 1.60% of ticks, never more
+than three in a row.
+
+Set `NAV_SIMULATION=false` to freeze prices, which is where a real feed would be
 wired in.
 
 ## Features
+
+**Signing in takes two factors.** The password earns a single-use code by
+email; the code and the password together earn the session. The password is
+required before any code is sent, so the endpoint cannot be used to flood a
+customer's inbox or to discover which addresses have accounts, and the password
+is checked again at the second step — otherwise a code lifted from an inbox
+would be enough on its own.
+
+**A browser can be remembered for seven days**, so the code is only asked for
+once per device. It skips the code and never the password — anyone who picks up
+that browser still has to know it. The token is long, random, stored hashed, and
+issued only on a sign-in that actually passed the code, so a stolen password
+cannot mint one. Changing the password drops every remembered device, because a
+reset means the account may already be in someone else's hands.
+
+**Forgotten passwords are reset by the same machinery**, and the reset form
+answers identically whether or not the address has an account. A form that says
+"no such account" is a list of everybody who banks here, free to anyone who
+asks.
 
 **Account opening.** A multi-step KYC application is saved as a draft as the
 customer goes, then submitted for approval. Uploaded documents are verified by
@@ -256,6 +325,17 @@ hour ago has exactly one day to plot, which draws as a single dot. Inside the
 window where intraday prices are still kept, the same portfolio is valued at
 every published tick instead.
 
+**Every transaction opens its full record.** The list answers what and when;
+the panel behind a row answers what the money actually bought — the units
+received and the unit price paid, with the arithmetic spelled out so a customer
+checking a figure does not have to work out where it came from.
+
+**Light and dark.** The theme follows the system until the customer chooses, and
+their choice then sticks. It is applied before the first paint, so there is no
+white flash on load. Implemented by redefining the theme's colour variables
+under one class rather than by hanging a `dark:` variant off several hundred
+utilities — see **Design decisions** below.
+
 **Risk analysis.** Each fund's risk level is weighted by what that holding is
 worth today to produce a score from 1 to 3, which is then compared against the
 risk profile the customer declared during account opening. A customer who chose
@@ -275,7 +355,10 @@ bearer token.
 | `POST` | `/api/auth/register` | Create an account and send a verification code |
 | `POST` | `/api/auth/verify-otp` | Verify the emailed code and sign in |
 | `POST` | `/api/auth/resend-otp` | Send a new verification code |
-| `POST` | `/api/auth/login` | Sign in |
+| `POST` | `/api/auth/login/request-code` | Check the password and email a sign-in code |
+| `POST` | `/api/auth/login` | Sign in with the password and either that code or a remembered device |
+| `POST` | `/api/auth/forgot-password` | Email a password reset code |
+| `POST` | `/api/auth/reset-password` | Set a new password using that code |
 | `GET` | `/api/auth/me` | Get the signed-in customer |
 
 ### Account opening
@@ -363,9 +446,13 @@ The app starts on `http://localhost:5174`.
 | `OTP_EXPIRY_MINUTES` | Code lifetime (default `10`) |
 | `OTP_MAX_ATTEMPTS` | Wrong attempts before a code is locked (default `5`) |
 | `OTP_RESEND_COOLDOWN_SECONDS` | Minimum gap between resends (default `60`) |
-| `RESEND_API_KEY` | Resend API key. Leave empty to log codes to the console instead of sending email |
-| `EMAIL_FROM` | Sender address |
-| `EXPOSE_DEV_OTP` | When `true`, returns the code in the API response. Force-disabled in production |
+| `SMTP_HOST` | SMTP server, e.g. `smtp.gmail.com`. See **Email delivery** below |
+| `SMTP_PORT` | SMTP port (default `587`; `465` switches to implicit TLS) |
+| `SMTP_USER` | SMTP username, e.g. the Gmail address. Leave empty to log codes to the console |
+| `SMTP_PASS` | SMTP password. For Gmail this is an App Password, not the account password |
+| `EMAIL_FROM` | Optional sender. Defaults to `SMTP_USER`, the only sender Gmail accepts |
+| `TRUSTED_DEVICE_DAYS` | How long "remember this device" skips the sign-in code for (default `7`) |
+| `EXPOSE_DEV_OTP` | When `true`, returns the code in the API response so signup can be tested without an inbox. Force-disabled in production, and required by the auth test suite |
 | `CLOUDINARY_CLOUD_NAME` | Leave the Cloudinary values empty in development and uploads go to `server/uploads` instead |
 | `CLOUDINARY_API_KEY` | |
 | `CLOUDINARY_API_SECRET` | |
@@ -387,11 +474,41 @@ Generate a JWT secret with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
+### Email delivery
+
+Verification codes are sent over SMTP. With no credentials the code is logged
+to the server console instead, so development needs no external account.
+
+SMTP rather than a transactional email API because a shared provider sandbox
+will only deliver to the address that owns the account until a domain is
+verified — no use for a portal that has to email whoever signs up. An ordinary
+mailbox will send to anyone.
+
+With Gmail:
+
+1. Turn on 2-Step Verification for the account.
+2. Create an [App Password](https://myaccount.google.com/apppasswords). The
+   account password will not work; Google rejects it over SMTP.
+3. Set `SMTP_USER` to the address and `SMTP_PASS` to that App Password.
+
+`EMAIL_FROM` is optional and defaults to `SMTP_USER`. Gmail replaces a sender
+that does not belong to the authenticated account, so set it only to add a
+display name and keep the address the same.
+
+The active transport is logged at boot, so a misconfigured deploy is visible
+immediately rather than at the first signup. A failed send never fails the
+request: the API reports `emailDelivered: false` and the verification screen
+says so, rather than leaving the customer waiting for an email that is not
+coming.
+
+Note that a free Gmail account is rate limited to roughly 500 messages a day.
+
 ### Testing the auth flow without an inbox
 
-With `RESEND_API_KEY` unset, verification codes are printed to the server
-console and returned as `data.verification.devOtp`, so the full signup flow can
-be exercised without configuring email.
+With SMTP unconfigured, verification codes are printed to the server console
+and returned as `data.verification.devOtp`, so the full signup flow can be
+exercised without an email account. `EXPOSE_DEV_OTP` is force-disabled when
+`NODE_ENV=production`.
 
 ### Moving prices on demand
 
@@ -405,7 +522,7 @@ npm run nav:advance -- --force
 
 ## Tests
 
-88 end-to-end checks run against a running server. Seed the database first, so
+106 end-to-end checks run against a running server. Seed the database first, so
 the suite has the demo account and price history it expects.
 
 ```bash
@@ -414,9 +531,14 @@ npm run db:seed
 npm test
 ```
 
+The signup checks need the verification code, which the API only returns when
+`EXPOSE_DEV_OTP=true`. With it off, the auth suite stops at that point and says
+so rather than failing five checks with errors that never name the cause; the
+products and account suites are unaffected.
+
 | Command | Covers |
 | --- | --- |
-| `npm run test:auth` | 18 checks — the signup flow, validation and credential errors, token handling, the resend cooldown and the attempt lockout |
+| `npm run test:auth` | 33 checks — the signup flow, code expiry and delivery reporting, two-factor sign-in, password reset including its refusal to reveal who has an account, validation and credential errors, token handling, the resend cooldown and the attempt lockout |
 | `npm run test:products` | 27 checks — listing and ordering, the daily price series, performance figures, and the intraday feed |
 | `npm run test:account` | 43 checks — draft saving and validation, submission guards, document upload rejections, portfolio valuation, risk analysis, investing limits, and cross-customer isolation |
 
@@ -426,6 +548,13 @@ reset it.
 ## Security
 
 - Passwords are hashed with bcrypt and never returned by any endpoint.
+- Signing in needs a second factor: a single-use code sent to the registered
+  address, checked alongside the password rather than instead of it.
+- A remembered device skips only that second factor. Its token is stored hashed,
+  expires on a fixed seven-day clock rather than sliding with use, and is
+  revoked for every device when the password changes.
+- The password reset form cannot be used to enumerate customers — every address
+  gets the same answer, including when a cooldown is in force.
 - One-time codes are stored hashed, expire, and lock out after repeated wrong
   attempts.
 - Authentication is enforced server side; the token carries only a user id and
@@ -459,6 +588,42 @@ it is set to.
 **Frontend.** `npm run build` produces a static bundle in `client/dist`. Set
 `VITE_API_URL` to the deployed API URL at build time, and set the API's
 `CLIENT_URL` to the frontend origin so CORS allows it.
+
+## Limitations
+
+Stated plainly, because knowing what a thing does not do is part of knowing what
+it does.
+
+**Fund prices are simulated.** There is no market data feed. The server
+publishes a new price for each fund every few minutes, and the whole simulation
+sits behind one flag and one module — `NAV_SIMULATION` and
+`src/services/nav.service.js` — which is where a real feed would replace it.
+
+**Money is notional.** Approval credits a balance from `INVESTABLE_CREDIT`;
+there is no payment integration, and none was asked for.
+
+**Investments only go one way.** The schema models `REDEMPTION` transactions,
+but no endpoint or screen sells a holding — only investing is implemented.
+
+**Approval is automatic.** A submitted application is approved immediately, by
+design; there is no admin portal and none was required.
+
+**Signing in needs an inbox.** The second factor is emailed, so the seeded demo
+account cannot be signed into by someone who does not receive mail at that
+address. For evaluation, either set `EXPOSE_DEV_OTP=true` so the code comes back
+in the API response and is shown on screen, or register with your own address —
+the whole journey works from a fresh signup.
+
+**Intraday history is a rolling window.** Tick-by-tick prices are kept for 48
+hours and then pruned; anything older is served from the daily record.
+
+**Gmail SMTP has a daily ceiling.** A free account is limited to roughly 500
+messages a day, which is ample for evaluation but is not a production mail
+setup.
+
+**Tests need a running server and a seeded database.** They are end-to-end smoke
+tests against real HTTP endpoints, not unit tests with mocks, so they exercise
+the real stack but cannot run in isolation.
 
 ## Demo Credentials
 

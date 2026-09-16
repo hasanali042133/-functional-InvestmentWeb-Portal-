@@ -109,4 +109,7 @@ export const toTransaction = (transaction) => ({
   amount: toNumber(transaction.amount),
   status: transaction.status,
   createdAt: transaction.createdAt,
+  // Null for any transaction that did not create a holding.
+  units: toNumber(transaction.investment?.units ?? null),
+  navAtPurchase: toNumber(transaction.investment?.navAtPurchase ?? null),
 });

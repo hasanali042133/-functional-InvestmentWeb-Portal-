@@ -4,6 +4,7 @@ import * as productsApi from '@/api/products.api.js';
 import { useApi } from '@/hooks/useApi.js';
 import { formatNumber } from '@/lib/format.js';
 import { cn } from '@/lib/cn.js';
+import { Spinner } from '@/components/ui/Spinner.jsx';
 
 const RISK_LABEL = { LOW: 'Low risk', MEDIUM: 'Medium risk', HIGH: 'High risk' };
 
@@ -26,7 +27,7 @@ const RISK_DOT = {
  */
 export function NavSearch({ className }) {
   const navigate = useNavigate();
-  const { data } = useApi(() => productsApi.listProducts(), []);
+  const { data, isLoading } = useApi(() => productsApi.listProducts(), []);
 
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -135,7 +136,15 @@ export function NavSearch({ className }) {
           role="listbox"
           className="animate-drop absolute z-40 mt-2 w-full overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200"
         >
-          {matches.length === 0 ? (
+          {isLoading ? (
+            /* Until the catalogue arrives nothing can match, and saying so
+               would be a lie about the funds rather than the truth about the
+               request. */
+            <li className="flex items-center gap-2.5 px-4 py-3 text-sm text-slate-500">
+              <Spinner size="sm" className="text-brand-700" />
+              Loading funds…
+            </li>
+          ) : matches.length === 0 ? (
             <li className="px-4 py-3 text-sm text-slate-500">
               Nothing matches “{query.trim()}”.
             </li>

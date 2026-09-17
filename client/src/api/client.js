@@ -33,11 +33,49 @@ export const api = axios.create({
   timeout: 20000,
 });
 
+/**
+ * How many requests are in the air, and who wants to know.
+ *
+ * Individual screens already say what they are waiting for — a skeleton shaped
+ * like the table that is coming, a spinner inside the button that was pressed.
+ * This is the one thing they cannot say: that something is happening at all,
+ * somewhere, when the waiting is not attached to anything the customer is
+ * looking at. A background refresh, a cold server taking its time, a request
+ * whose screen has not been painted yet.
+ *
+ * Counted here rather than in each caller because this is the only place every
+ * request must pass through.
+ */
+let inFlight = 0;
+const watchers = new Set();
+
+const notify = () => {
+  for (const watcher of watchers) watcher();
+};
+
+export const getInFlight = () => inFlight;
+
+export const subscribeToRequests = (watcher) => {
+  watchers.add(watcher);
+  return () => watchers.delete(watcher);
+};
+
 api.interceptors.request.use((config) => {
   const token = tokenStore.get();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  inFlight += 1;
+  notify();
+
   return config;
 });
+
+// Paired with the increment above. Once axios has a config the response
+// pipeline always runs, success or failure, so the count cannot be stranded.
+const settled = () => {
+  inFlight = Math.max(0, inFlight - 1);
+  notify();
+};
 
 /**
  * The shape every screen can rely on when a request fails.
@@ -65,8 +103,13 @@ export class ApiError extends Error {
 export const SESSION_EXPIRED_EVENT = 'investment-portal:session-expired';
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    settled();
+    return response;
+  },
   (error) => {
+    settled();
+
     if (error.code === 'ECONNABORTED') {
       return Promise.reject(
         new ApiError({ message: 'The request timed out. Please try again.', code: 'TIMEOUT' }),

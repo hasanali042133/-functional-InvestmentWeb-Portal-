@@ -30,3 +30,6 @@ coverage/
 
 # Local working notes (not part of the deliverable)
 PLAN.md
+
+# Local tooling config (not part of the deliverable)
+.claude/
